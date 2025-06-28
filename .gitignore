@@ -1,0 +1,44 @@
+# Environment variables
+.env
+
+# Byte-compiled / cached files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environment
+venv/
+.env/
+.venv/
+env/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# VS Code settings
+.vscode/
+
+# SQLite DB (optional — if DB is not meant to be committed)
+data/chinook.db
+
+# Vectorstore / Embeddings
+vectorstore/
+*.faiss
+*.pkl
+
+# Log files
+*.log
+
+# Python compiled extensions
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Build outputs
+*.egg-info/
+dist/
+build/

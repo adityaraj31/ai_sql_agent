@@ -1,0 +1,7 @@
+streamlit
+langchain
+langchain-groq
+groq
+faiss-cpu
+tiktoken
+sentence-transformers
