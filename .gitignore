@@ -29,8 +29,10 @@ vectorstore/
 *.faiss
 *.pkl
 
+
 # Log files
 *.log
+query_logs.json
 
 # Python compiled extensions
 *.so
@@ -42,3 +44,9 @@ vectorstore/
 *.egg-info/
 dist/
 build/
+
+# Testing and Linters
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

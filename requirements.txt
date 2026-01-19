@@ -1,7 +1,11 @@
 streamlit
 langchain
 langchain-groq
-groq
-faiss-cpu
+langchain-pinecone
+langchain-community
+langchain-huggingface
+pinecone
+plotly
+pandas
+python-dotenv
 tiktoken
-sentence-transformers

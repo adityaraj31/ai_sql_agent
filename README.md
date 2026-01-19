@@ -1,9 +1,9 @@
-# 🧠 AI SQL Agent for Business Dashboard
+# 🧠 AI SQL Agent
 
 A GenAI-powered intelligent SQL assistant that converts natural language questions into executable SQL queries and displays results from a real database.
 
-> Built using LangChain + FAISS + Groq + Streamlit  
-> Powered by the Chinook SQLite database (sample business data)
+> **Built using:** LangChain + Pinecone + Groq + Streamlit  
+> **Backend:** Python + SQLite (Chinook DB)
 
 ---
 
@@ -11,10 +11,10 @@ A GenAI-powered intelligent SQL assistant that converts natural language questio
 
 Non-technical stakeholders (like managers, marketers, and analysts) often struggle to retrieve insights from raw databases because they don't know SQL.
 
-### 🔍 Example Problem:
-> "Show me the top 5 customers by total invoice value"  
-> "What are the monthly sales trends?"  
-> "How many orders did we receive from each country?"
+### 🔍 Example Problems:
+> "Show me the top five customers by total invoice value"  
+> "How many orders did we receive from each country?"  
+> "Show total sales grouped by country"
 
 Manually writing SQL queries for such questions is slow, repetitive, and requires technical knowledge.
 
@@ -38,7 +38,7 @@ This tool bridges the gap between business users and SQL databases by allowing a
 |---------------|-----------------------------|
 | LLM           | [Groq](https://groq.com/) (Llama3 Turbo) |
 | RAG Framework | [LangChain](https://www.langchain.com/) |
-| Vector DB     | [FAISS](https://github.com/facebookresearch/faiss) |
+| Vector DB     | [Pinecone](https://www.pinecone.io/) (Cloud Vector DB) |
 | Frontend      | [Streamlit](https://streamlit.io/) |
 | Database      | Chinook SQLite (sample DB)  |
 | Language      | Python                      |
@@ -47,12 +47,13 @@ This tool bridges the gap between business users and SQL databases by allowing a
 
 ## 🧩 Features
 
-- 🔍 Ask data-related questions in plain English
-- 📜 Auto-generates SQL queries using RAG + LLM
-- 💾 Executes queries on real data (Chinook DB)
-- 📊 Displays tabular results in UI
-- 🚫 Handles errors like invalid SQL or bad queries
-- 🔐 Uses `.env` for API security
+- 🔍 **Ask in Plain English**: Convert natural language to SQL.
+- ⚡ **Cloud Vector Search**: Uses **Pinecone** for scalable, high-speed schema retrieval.
+- 📜 **Auto-Generated SQL**: Powered by Llama3 on Groq.
+- 💾 **Real Data Execution**: Runs queries securely on a local SQLite database.
+- � **Query History**: View past queries, generated SQL, and execution status in the sidebar.
+- � **Logging**: Automatically logs all user interactions for auditing.
+- 🔐 **Secure**: Uses `.env` for API key management.
 
 ---
 
@@ -62,16 +63,18 @@ This tool bridges the gap between business users and SQL databases by allowing a
 ai-sql-agent/
 ├── data/
 │   └── chinook.db              # SQLite database
-├── vectorstore/
-│   └── index.faiss             # FAISS vector index
 ├── scripts/
-│   ├── create_vectorstore.py   # Generate vector embeddings
-│   └── extract_schema.py       # Parse DB schema
-├── app.py                      # Streamlit frontend
-├── rag_sql_generator.py        # LangChain RAG logic
-├── run_sql.py                  # SQL executor
-├── requirements.txt
-└── .env                        # Groq API Key
+│   ├── test_safety.py          # Value safety test script
+├── src/
+│   ├── ingestion.py            # Vector store creation/doc embedding
+│   ├── rag.py                  # Core RAG logic & SQL generation
+│   ├── database.py             # Database operations & safety checks
+│   ├── logger.py               # Query logging
+│   ├── visualization.py        # Dynamic chart generation
+│   └── config.py               # Configuration constants
+├── app.py                      # Main Streamlit application
+├── requirements.txt            # Project dependencies
+└── .env                        # API Keys (Groq, Pinecone)
 ```
 
 ---
@@ -89,18 +92,20 @@ ai-sql-agent/
    pip install -r requirements.txt
    ```
 
-3. **Set your Groq API key**
-   ```
-   # .env file
-   GROQ_API_KEY=your_groq_api_key_here
+3. **Set your API keys**
+   Create a `.env` file in the root directory:
+   ```env
+   GROQ_API_KEY=your_groq_api_key
+   PINECONE_API_KEY=your_pinecone_api_key
    ```
 
-4. **Create vectorstore**
+4. **Initialize Vector Store**
+   Run the setup script:
    ```bash
-   python scripts/create_vectorstore.py
+   python src/ingestion.py
    ```
 
-5. **Run the app**
+5. **Run the App**
    ```bash
    streamlit run app.py
    ```
@@ -115,10 +120,10 @@ ai-sql-agent/
 
 ## 🧠 Powered By
 
-- LangChain for RAG
-- FAISS for fast retrieval
-- Groq for LLM response
-- Streamlit for frontend
+- **LangChain** for RAG orchestration
+- **Pinecone** for serverless vector storage
+- **Groq** for ultra-fast LLM inference
+- **Streamlit** for the interactive dashboard
 
 ---
 
@@ -133,10 +138,12 @@ ai-sql-agent/
 
 ## 📌 Future Work
 
-- Support for other SQL databases (PostgreSQL, MySQL)
-- Natural language filtering & grouping
-- Chart/graph visualizations using Plotly/Altair
-- User query history and logs
+- [ ] Support for PostgreSQL / MySQL
+- [ ] Natural language filtering & grouping
+- [x] **Chart/graph visualizations** (Completed ✅)
+- [x] **User query history and logs** (Completed ✅)
+- [x] **SQL Safety Guardrails** (Completed ✅)
+- [x] **External Vector DB Integration** (Completed ✅)
 
 ---
 
