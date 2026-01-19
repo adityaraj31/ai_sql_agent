@@ -16,7 +16,7 @@ st.set_page_config(
 # Title and Description
 st.title("🤖 AI SQL Agent")
 st.markdown("""
-Ask questions in plain English and get SQL queries + results from the Chinook database. 
+Ask questions in plain English and get SQL queries + results from the connected database. 
 Powered by **Llama3**, **LangChain**, and **Pinecone**.
 """)
 
@@ -38,52 +38,82 @@ else:
 
 # --- Main Interface ---
 
-question = st.text_input("Ask your question", placeholder="e.g., Show top 5 customers by purchase amount", key="user_question")
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if question:
-    # 1. Generate SQL
-    st.subheader("1. Generated SQL")
-    with st.spinner("Generating SQL query..."):
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if "sql" in message:
+            st.code(message["sql"], language="sql")
+        if "results" in message:
+            st.dataframe(message["results"], width="stretch")
+        if "chart" in message and message["chart"]:
+            st.plotly_chart(message["chart"], width="stretch")
+
+# React to user input
+if prompt := st.chat_input("Ask a question data (e.g., 'Show top 5 customers')"):
+    # Display user message in chat message container
+    st.chat_message("user").markdown(prompt)
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Prepare chat history for RAG (pass full objects)
+    chat_history = st.session_state.messages
+
+    # Generate SQL
+    with st.spinner("Analyzing request..."):
         try:
-            sql_query = generate_sql(question)
-            st.code(sql_query, language="sql")
+            sql_query = generate_sql(prompt, chat_history)
         except Exception as e:
             st.error(f"Error generating SQL: {e}")
             sql_query = None
 
-    # 2. Execute SQL
     if sql_query:
-        st.subheader("2. Query Results")
-        with st.spinner("Running query on database..."):
-            results, error = run_sql_query(sql_query)
-
-        if error:
-            st.error(f"❌ SQL Execution Error:\n```\n{error}\n```")
-            log_query(question, sql_query, success=False, error_message=error)
-        elif results:
-            # Display Data
-            df = pd.DataFrame(results)
-            st.dataframe(df, use_container_width=True)
+        # Display Assistant Response Logic
+        with st.chat_message("assistant"):
+            st.markdown(f"**Generated SQL:**")
+            st.code(sql_query, language="sql")
             
-            log_query(question, sql_query, success=True)
+            with st.spinner("Running query..."):
+                results, error = run_sql_query(sql_query)
+            
+            # Debugging outputs
+            print(f"Query Result:\n{results}")
+            if error:
+                print(f"Query Error:\n{error}")
 
-            # 3. Visualization
-            st.subheader("3. Visualization")
-            with st.spinner("Analyzing data for visualization..."):
-                viz_config = analyze_data_for_chart(question, df)
+            response_content = ""
+            current_response = {"role": "assistant", "content": "Here are the results:", "sql": sql_query}
+
+            if error:
+                st.error(f"❌ Execution Error: {error}")
+                response_content = f"Error: {error}"
+                log_query(prompt, sql_query, success=False, error_message=error)
+            elif results:
+                df = pd.DataFrame(results)
+                st.dataframe(df, width="stretch")
+                current_response["results"] = df
                 
-                if viz_config:
-                    chart = render_chart(df, viz_config)
-                    if chart:
-                        st.plotly_chart(chart, use_container_width=True)
-                    else:
-                        st.info("Visualizer proposed a chart but failed to render it.")
-                else:
-                    st.info("No suitable visualization found for this data.")
-                    
-        else:
-            st.warning("Query executed successfully but returned no results.")
-            log_query(question, sql_query, success=True, error_message="No results returned")
+                log_query(prompt, sql_query, success=True)
+                
+                # Visualizations
+                with st.spinner("Checking for visualizations..."):
+                    viz_config = analyze_data_for_chart(prompt, df)
+                    if viz_config:
+                        chart = render_chart(df, viz_config)
+                        if chart:
+                            st.plotly_chart(chart, width="stretch")
+                            current_response["chart"] = chart
+
+            else:
+                st.warning("Query returned no results.")
+                response_content = "Query returned no results."
+                log_query(prompt, sql_query, success=True, error_message="No results")
+
+            # Add assistant response to chat history
+            st.session_state.messages.append(current_response)
 
 # Footer
 st.markdown("---")

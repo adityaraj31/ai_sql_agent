@@ -9,3 +9,4 @@ plotly
 pandas
 python-dotenv
 tiktoken
+pytest

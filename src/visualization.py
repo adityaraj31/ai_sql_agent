@@ -81,6 +81,7 @@ def analyze_data_for_chart(question: str, df: pd.DataFrame) -> Optional[Dict[str
                 return None
 
         config = json.loads(json_str)
+        print(f"Visualization Config generated: {config}")
         
         if config.get('chart_type') == 'none':
             return None

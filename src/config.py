@@ -22,7 +22,7 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 # Models
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-LLM_MODEL_NAME = "llama-3.1-8b-instant"
+LLM_MODEL_NAME = "llama-3.3-70b-versatile"
 
 # Vector Store
 PINECONE_INDEX_NAME = "ai-sql-agent"

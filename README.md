@@ -63,8 +63,9 @@ This tool bridges the gap between business users and SQL databases by allowing a
 ai-sql-agent/
 ├── data/
 │   └── chinook.db              # SQLite database
-├── scripts/
-│   ├── test_safety.py          # Value safety test script
+├── tests/
+│   ├── test_integration.py     # Complex query integration tests
+│   └── test_edge_cases.py      # Safety & edge case tests
 ├── src/
 │   ├── ingestion.py            # Vector store creation/doc embedding
 │   ├── rag.py                  # Core RAG logic & SQL generation
@@ -110,6 +111,12 @@ ai-sql-agent/
    streamlit run app.py
    ```
 
+6. **Run Tests**
+   To execute the test suite (ensures complex queries are working):
+   ```bash
+   pytest tests/
+   ```
+
 ---
 
 ## 📸 UI Preview
@@ -139,7 +146,7 @@ ai-sql-agent/
 ## 📌 Future Work
 
 - [ ] Support for PostgreSQL / MySQL
-- [ ] Natural language filtering & grouping
+- [x] Natural language filtering & grouping (Completed with Llama 3.3 70B ✅)
 - [x] **Chart/graph visualizations** (Completed ✅)
 - [x] **User query history and logs** (Completed ✅)
 - [x] **SQL Safety Guardrails** (Completed ✅)
