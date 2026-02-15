@@ -50,3 +50,5 @@ build/
 .ruff_cache/
 .coverage
 htmlcov/
+TESTING.md
+check_db.py

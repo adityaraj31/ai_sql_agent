@@ -1,6 +1,6 @@
 # 🧠 AI SQL Agent
 
-A GenAI-powered intelligent SQL assistant that converts natural language questions into executable SQL queries and displays results from a real database.
+A GenAI-powered intelligent SQL assistant that converts natural language questions into executable SQL queries, provides autonomous visualizations, and maintains conversational context.
 
 > **Built using:** LangChain + Pinecone + Groq + Streamlit  
 > **Backend:** Python + SQLite (Chinook DB)
@@ -12,6 +12,7 @@ A GenAI-powered intelligent SQL assistant that converts natural language questio
 Non-technical stakeholders (like managers, marketers, and analysts) often struggle to retrieve insights from raw databases because they don't know SQL.
 
 ### 🔍 Example Problems:
+
 > "Show me the top five customers by total invoice value"  
 > "How many orders did we receive from each country?"  
 > "Show total sales grouped by country"
@@ -25,6 +26,7 @@ Manually writing SQL queries for such questions is slow, repetitive, and require
 This tool bridges the gap between business users and SQL databases by allowing anyone to ask data questions in plain English.
 
 ### 💼 Ideal For:
+
 - Business dashboards
 - Internal analytics tools
 - Data teams working with non-technical users
@@ -34,38 +36,23 @@ This tool bridges the gap between business users and SQL databases by allowing a
 
 ## 🛠 Tech Stack
 
-| Component     | Tool / Framework            |
-|---------------|-----------------------------|
-| LLM           | [Groq](https://groq.com/) (Llama3 Turbo) |
-| RAG Framework | [LangChain](https://www.langchain.com/) |
+| Component     | Tool / Framework                                       |
+| ------------- | ------------------------------------------------------ |
+| LLM           | [Groq](https://groq.com/) (Llama3.3 70B Turbo)         |
+| RAG Framework | [LangChain](https://www.langchain.com/)                |
 | Vector DB     | [Pinecone](https://www.pinecone.io/) (Cloud Vector DB) |
-| Frontend      | [Streamlit](https://streamlit.io/) |
-| Database      | Chinook SQLite (sample DB)  |
-| Language      | Python                      |
+| Tracing       | [LangSmith](https://smith.langchain.com/)              |
+| Frontend      | [Streamlit](https://streamlit.io/)                     |
+| Database      | Chinook SQLite (sample DB)                             |
 
 ---
 
-## 🧩 Features
-
-- 🔍 **Ask in Plain English**: Convert natural language to SQL.
-- ⚡ **Cloud Vector Search**: Uses **Pinecone** for scalable, high-speed schema retrieval.
-- 📜 **Auto-Generated SQL**: Powered by Llama3 on Groq.
-- 💾 **Real Data Execution**: Runs queries securely on a local SQLite database.
-- � **Query History**: View past queries, generated SQL, and execution status in the sidebar.
-- � **Logging**: Automatically logs all user interactions for auditing.
-- 🔐 **Secure**: Uses `.env` for API key management.
-
----
-
-## 🧱 Folder Structure
+## 🧩 Folder Structure
 
 ```
 ai-sql-agent/
 ├── data/
 │   └── chinook.db              # SQLite database
-├── tests/
-│   ├── test_integration.py     # Complex query integration tests
-│   └── test_edge_cases.py      # Safety & edge case tests
 ├── src/
 │   ├── ingestion.py            # Vector store creation/doc embedding
 │   ├── rag.py                  # Core RAG logic & SQL generation
@@ -74,9 +61,21 @@ ai-sql-agent/
 │   ├── visualization.py        # Dynamic chart generation
 │   └── config.py               # Configuration constants
 ├── app.py                      # Main Streamlit application
+├── server.py                   # FastAPI backend
 ├── requirements.txt            # Project dependencies
-└── .env                        # API Keys (Groq, Pinecone)
+└── .env                        # API Keys (Groq, Pinecone, LangSmith)
 ```
+
+---
+
+## 🔍 LangSmith Tracing & Monitoring
+
+Full observability is integrated via **LangSmith** to monitor LLM latency, token usage, and RAG retrieval accuracy.
+
+### ✨ Highlights:
+- **Trace Visibility**: Inspect every step of the reformulation and generation chain.
+- **Performance Metrics**: Monitor token usage and latency for Llama3.3.
+- **Error Tracking**: Identify schema retrieval gaps or SQL syntax errors instantly.
 
 ---
 
@@ -84,53 +83,42 @@ ai-sql-agent/
 
 1. **Clone the repo**
    ```bash
-   git clone https://github.com/yourusername/ai-sql-agent.git
+   git clone https://github.com/adityaraj31/ai-sql-agent.git
    cd ai-sql-agent
    ```
 
-2. **Install dependencies**
+2. **Install Dependencies** (Recommended: [uv](https://github.com/astral-sh/uv))
    ```bash
-   pip install -r requirements.txt
+   uv pip install -r requirements.txt
    ```
 
-3. **Set your API keys**
-   Create a `.env` file in the root directory:
+3. **Set Environment Variables**
+   Create a `.env` file:
    ```env
    GROQ_API_KEY=your_groq_api_key
    PINECONE_API_KEY=your_pinecone_api_key
+   PINECONE_INDEX_NAME=your_index_name
+   
+   # Tracing (Optional)
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_API_KEY=your_langsmith_api_key
+   LANGCHAIN_PROJECT=ai-sql-agent
    ```
 
-4. **Initialize Vector Store**
-   Run the setup script:
+4. **Initialize Data**
    ```bash
    python src/ingestion.py
    ```
 
-5. **Run the App**
+5. **Start Backend & App**
+   Run the FastAPI server and Streamlit app:
    ```bash
+   # Terminal 1
+   python server.py
+   
+   # Terminal 2
    streamlit run app.py
    ```
-
-6. **Run Tests**
-   To execute the test suite (ensures complex queries are working):
-   ```bash
-   pytest tests/
-   ```
-
----
-
-## 📸 UI Preview
-
-> ![Preview](preview_screenshot.png)
-
----
-
-## 🧠 Powered By
-
-- **LangChain** for RAG orchestration
-- **Pinecone** for serverless vector storage
-- **Groq** for ultra-fast LLM inference
-- **Streamlit** for the interactive dashboard
 
 ---
 
@@ -138,24 +126,10 @@ ai-sql-agent/
 
 **Aditya Raj Singh**  
 📍 GenAI & MERN Stack Developer  
-🎓 KCC Institute of Technology and Management  
-🔗 [LinkedIn](https://linkedin.com/in/your-profile)
+🔗 [LinkedIn](https://linkedin.com/in/adityaraj31)  
+🚀 Deep Learning | Multi-Agent Systems | RAG Pipelines
 
 ---
 
-## 📌 Future Work
-
-- [ ] Support for PostgreSQL / MySQL
-- [x] Natural language filtering & grouping (Completed with Llama 3.3 70B ✅)
-- [x] **Chart/graph visualizations** (Completed ✅)
-- [x] **User query history and logs** (Completed ✅)
-- [x] **SQL Safety Guardrails** (Completed ✅)
-- [x] **External Vector DB Integration** (Completed ✅)
-
----
-
-## ⭐️ If you liked this project
-
-- Drop a ⭐️ on GitHub
-- Connect with me on LinkedIn
-- Fork and extend it!
+## ⭐️ Support the Project
+If you find this project useful, please give it a ⭐️ on GitHub and connect with me for collaborations!

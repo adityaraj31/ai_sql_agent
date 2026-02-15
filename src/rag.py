@@ -89,36 +89,76 @@ def get_chat_history_str(chat_history: list) -> str:
         
     return "\n".join(formatted_history)
 
+def detect_comparison_keywords(question: str) -> tuple:
+    """
+    Detect if user is asking for a comparison.
+    Returns: (is_comparison, comparison_type)
+    """
+    question_lower = question.lower()
+    keywords = {
+        'vs': 'versus', 'versus': 'versus', 'compared to': 'comparison',
+        'compared with': 'comparison', 'difference': 'difference', 'growth': 'growth',
+        'change': 'change', 'increased': 'trend', 'decreased': 'trend',
+        'higher': 'comparison', 'lower': 'comparison', 'improvement': 'trend',
+        'decline': 'trend', 'quarter': 'time_period', 'month': 'time_period',
+        'year': 'time_period', 'last': 'time_reference', 'previous': 'time_reference'
+    }
+    
+    for keyword, comp_type in keywords.items():
+        if keyword in question_lower:
+            return True, comp_type
+    return False, None
+
 def reformulate_question(question: str, chat_history: list) -> str:
     """
     Uses the LLM to rewrite a follow-up question into a standalone question.
+    Handles comparisons, temporal references, and context-dependent pronouns.
     """
     if not chat_history:
         return question
 
     history_str = get_chat_history_str(chat_history)
+    is_comparison, comp_type = detect_comparison_keywords(question)
+    
+    comparison_context = ""
+    if is_comparison:
+        comparison_context = f"""
+    
+    IMPORTANT: The user is asking for a COMPARISON (type: {comp_type}).
+    When you detect comparison keywords like 'vs', 'compared to', 'growth', 'change', etc:
+    - Identify what is being compared (time periods, groups, metrics, etc.)
+    - Include BOTH the current state AND the comparison baseline
+    - Examples:
+      * "vs last quarter" → include current quarter AND previous quarter
+      * "how much higher" → compare the two values
+      * "growth vs last year" → year-over-year comparison"""
     
     prompt = PromptTemplate.from_template("""
-    You are a helpful assistant rewriting questions to be standalone.
+    You are a helpful assistant rewriting questions to be standalone, understanding context and comparisons.
     
     Context History:
     {history}
     
     Latest User Question: {question}
+    {comparison_context}
     
     Task:
-    Rewrite the "Latest User Question" into a standalone question that captures the context from the history (especially previous SQL queries).
-    If the user says "their" or "it", refer to the specific data fetched in the previous SQL query.
+    Rewrite the "Latest User Question" into a standalone question that:
+    1. Captures context from history (especially previous SQL queries and results)
+    2. Resolves pronouns: "their" = the entities from previous query, "it" = previous metric
+    3. Includes temporal context: "last quarter" relative to current period
+    4. For comparisons: specifies BOTH items being compared
     
-    Example:
-    History: 
-    User: Top 5 customers
-    Assistant: (SQL: SELECT Name FROM Customer LIMIT 5)
-    User: What are their emails?
+    Examples:
+    History: User asked "Show sales by region"
+    Question: "How much higher was North vs South?"
+    Reformulated: "What are the total sales for North region compared to South region?"
     
-    Reformulated: What are the emails of the top 5 customers identified in the previous query?
+    History: User asked "Q4 revenue"
+    Question: "How much did we grow?"
+    Reformulated: "What is the growth rate comparing Q4 revenue to Q3 revenue?"
     
-    Output ONLY the reformulated question.
+    Output ONLY the reformulated question, no explanations.
     """)
     
     llm = get_llm()
@@ -126,11 +166,14 @@ def reformulate_question(question: str, chat_history: list) -> str:
     
     response = chain.invoke({
         "history": history_str,
-        "question": question
+        "question": question,
+        "comparison_context": comparison_context
     })
     
     refined_question = response.content.strip()
-    print(f"Reformulated: '{question}' -> '{refined_question}'")
+    print(f"📝 Reformulated: '{question}' -> '{refined_question}'")
+    if is_comparison:
+        print(f"   🔄 Comparison detected: {comp_type}")
     return refined_question
 
 def generate_sql(question: str, chat_history: list = None) -> str:
@@ -156,15 +199,31 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     print(f"Retrieved {len(docs)} schema documents: {table_names}")
     
     prompt = PromptTemplate.from_template("""
-    You are an expert SQL assistant.
+    You are an expert SQL assistant skilled in business analysis and comparisons.
     Use the schema below to answer the user's question by writing a correct SQL query.
     
     Rules:
     - GENERATE ONLY READ-ONLY SQL (SELECT, WITH, PRAGMA). DO NOT generate UPDATE, DELETE, DROP, INSERT, or ALTER statements.
     - **dialect: SQLite**. Do NOT use `TOP n`. Use `LIMIT n` at the end of the query.
-    - **Date Handling**: For extracting year/month, use SQLite's `strftime('%Y-%m', DateColumn)`.
-    - **Ambiguity**: If the user asks for "best" or "top" without a specific metric, assume "Total Sales" or "Count" and alias the column clearly.
+    - **Date Handling**: For extracting year/month, use SQLite's `strftime('%Y-%m', DateColumn)`. For year, use `strftime('%Y', DateColumn)`.
+    - **Comparisons**: When user asks to compare two periods/groups:
+      * Use UNION or JOIN to show both periods side-by-side with clear aliases
+      * Examples: 'current_period' vs 'previous_period', 'group_a' vs 'group_b', 'this_year' vs 'last_year'
+      * Calculate differences/growth when asked: (current - previous) / previous * 100 AS growth_pct
+      * Order results logically (e.g., chronologically or by metric value)
+    - **Temporal Queries**: 
+      * IMPORTANT: The database is HISTORICAL. It contains data only from **2009 to 2013**.
+      * If the user asks for "today", "now", or relative periods like "last quarter" without context, assume "today" is **2013-12-31**.
+      * "Last quarter" = Oct-Dec 2013.
+      * "Last year" = 2012.
+      * Be precise with date ranges and ALWAYS use `strftime` for SQLite date comparisons.
+    - **Ambiguity**: If the user asks for "best" or "top" without a specific metric, assume "Total Sales" or "Count" with clear aliases.
     - **Refusal**: If the question is completely unrelated to the database (e.g., "capital of France"), return: `SELECT 'I can only answer questions about the connected database.' AS Service_Message;`
+    - Only use columns and tables that exist in the schema.
+    - Do not assume columns like "total" exist — calculate them if needed.
+    - Use JOINs correctly based on foreign keys defined in the schema.
+    - Use sensible aliases for tables (e.g., first letter of table name) for clarity.
+    - Return ONLY the SQL query, in a code block formatted like ```sql ... ``` — nothing else.
     - Only use columns and tables that exist in the schema.
     - Do not assume columns like "total" exist — calculate them if needed.
     - Do not assume columns like "total" exist — calculate them if needed.

@@ -1,5 +1,6 @@
 
 import time
+import os
 from langchain_core.documents import Document
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -11,9 +12,23 @@ from src.config import (
     PINECONE_METRIC, 
     PINECONE_CLOUD, 
     PINECONE_REGION,
-    EMBEDDING_MODEL_NAME
+    EMBEDDING_MODEL_NAME,
+    LANGCHAIN_TRACING_V2,
+    LANGCHAIN_API_KEY,
+    LANGCHAIN_PROJECT,
+    LANGCHAIN_ENDPOINT
 )
 from src.database import get_db_schema
+
+# Initialize LangSmith Tracing
+if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
+    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
+    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
+    print("✅ LangSmith tracing enabled for ingestion")
+else:
+    print("ℹ️  LangSmith tracing disabled")
 
 def create_documents_from_schema() -> list[Document]:
     """Convert DB schema to a list of LangChain Documents."""

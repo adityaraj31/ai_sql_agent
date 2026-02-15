@@ -37,3 +37,11 @@ def get_logs() -> List[Dict]:
     except Exception as e:
         print(f"Failed to read logs: {e}")
         return []
+        
+def clear_logs() -> None:
+    """Clears all query logs."""
+    try:
+        with open(LOG_FILE, "w", encoding='utf-8') as f:
+            json.dump([], f, indent=4)
+    except Exception as e:
+        print(f"Failed to clear logs: {e}")
