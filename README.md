@@ -136,7 +136,7 @@ After the initial showcase, the following advanced agentic features are planned:
 
 **Aditya Raj Singh**  
 📍 GenAI & MERN Stack Developer  
-🔗 [LinkedIn](https://linkedin.com/in/adityaraj31)  
+🔗 [LinkedIn](https://linkedin.com/in/adityarajsingh31)  
 🚀 Deep Learning | Multi-Agent Systems | RAG Pipelines
 
 ---
