@@ -122,6 +122,16 @@ Full observability is integrated via **LangSmith** to monitor LLM latency, token
 
 ---
 
+## Task to complete
+
+After the initial showcase, the following advanced agentic features are planned:
+- [ ] **Agentic Self-Correction**: Implement a reflection loop to self-heal SQL syntax errors in real-time.
+- [ ] **Dynamic Few-Shot RAG**: Inject similar "Golden SQL" examples into the prompt for complex query accuracy.
+- [ ] **SQL Explainability**: Add a Chain-of-Thought toggle to explain the logic behind generated queries.
+- [ ] **Security Auditor Agent**: A dedicated LLM layer to validate SQL safety beyond standard regex checks.
+
+---
+
 ## 🙋‍♂️ Author
 
 **Aditya Raj Singh**  

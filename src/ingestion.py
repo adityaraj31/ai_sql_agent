@@ -1,6 +1,10 @@
 
 import time
 import os
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 from langchain_core.documents import Document
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -19,6 +23,7 @@ from src.config import (
     LANGCHAIN_ENDPOINT
 )
 from src.database import get_db_schema
+from src.rag import get_embeddings, get_vectorstore
 
 # Initialize LangSmith Tracing
 if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
@@ -26,9 +31,10 @@ if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
     os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
     os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
     os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-    print("✅ LangSmith tracing enabled for ingestion")
+    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
+    logger.info("✅ LangSmith tracing enabled for ingestion")
 else:
-    print("ℹ️  LangSmith tracing disabled")
+    logger.info("ℹ️  LangSmith tracing disabled")
 
 def create_documents_from_schema() -> list[Document]:
     """Convert DB schema to a list of LangChain Documents."""
@@ -45,7 +51,7 @@ def build_index():
     if not PINECONE_API_KEY:
         raise ValueError("PINECONE_API_KEY not found in environment variables.")
 
-    print(f"Initializing Pinecone...")
+    logger.info("Initializing Pinecone...")
     pc = Pinecone(api_key=PINECONE_API_KEY)
 
     # Check/Create Index
@@ -54,11 +60,11 @@ def build_index():
         # We need to check if dimensions match, or just always recreate to be safe since we are switching back
         # The user might have a 768 dim index now. We need 384.
         # It is safer to delete and recreate.
-        print(f"Deleting existing index {PINECONE_INDEX_NAME} to ensure correct dimensions (384)...")
+        logger.info(f"Deleting existing index {PINECONE_INDEX_NAME} to ensure correct dimensions (384)...")
         pc.delete_index(PINECONE_INDEX_NAME)
         time.sleep(10) # Wait for deletion to propagate
 
-    print(f"Creating index: {PINECONE_INDEX_NAME}")
+    logger.info(f"Creating index: {PINECONE_INDEX_NAME}")
     pc.create_index(
         name=PINECONE_INDEX_NAME,
         dimension=PINECONE_DIMENSION,
@@ -69,14 +75,14 @@ def build_index():
         time.sleep(1)
 
     # Generate Docs
-    print("Extracting schema...")
+    logger.info("Extracting schema...")
     docs = create_documents_from_schema()
-    print(f"Found {len(docs)} tables.")
+    logger.info(f"Found {len(docs)} tables.")
 
     # Embed and Upload
-    print("Uploading to Pinecone (this may take a moment)...")
+    logger.info("Uploading to Pinecone (this may take a moment)...")
     
-    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+    embeddings = get_embeddings()
     
     # We can use from_documents which handles batching usually
     PineconeVectorStore.from_documents(
@@ -84,7 +90,12 @@ def build_index():
         embeddings, 
         index_name=PINECONE_INDEX_NAME
     )
-    print("Vector Store Successfully Updated!")
+    logger.info("Vector Store Successfully Updated!")
+
+    # Warm up the vectorstore singleton in src.rag with a fresh connection
+    logger.info("Warming up RAG vectorstore connection...")
+    get_vectorstore(force_reload=True)
+    logger.info("RAG engine is warm and ready!")
 
 if __name__ == "__main__":
     build_index()

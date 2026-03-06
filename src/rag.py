@@ -1,4 +1,5 @@
-
+import logging
+import threading
 import re
 from typing import Optional
 from langchain_pinecone import PineconeVectorStore
@@ -12,29 +13,45 @@ from src.config import (
     LLM_MODEL_NAME
 )
 
-import streamlit as st
 import time
 
-@st.cache_resource
-def get_embeddings():
-    print("🚀 Starting: Loading Embeddings...")
-    start_time = time.time()
-    # No API key needed for local HF model
-    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-    print(f"✅ Finished: Embeddings loaded in {time.time() - start_time:.2f}s")
-    return embeddings
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-@st.cache_resource
-def get_vectorstore():
-    print("🚀 Starting: Connecting to Pinecone...")
-    start_time = time.time()
-    embeddings = get_embeddings()
-    vectorstore = PineconeVectorStore.from_existing_index(
-        index_name=PINECONE_INDEX_NAME,
-        embedding=embeddings
-    )
-    print(f"✅ Finished: VectorStore connected in {time.time() - start_time:.2f}s")
-    return vectorstore
+# Global singleton instances and locks for thread-safety
+_embeddings = None
+_vectorstore = None
+_embeddings_lock = threading.Lock()
+_vectorstore_lock = threading.Lock()
+
+def get_embeddings():
+    global _embeddings
+    with _embeddings_lock:
+        if _embeddings is not None:
+            return _embeddings
+            
+        logger.info("🚀 Starting: Loading Embeddings singleton...")
+        start_time = time.time()
+        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+        logger.info(f"✅ Finished: Embeddings loaded in {time.time() - start_time:.2f}s")
+        return _embeddings
+
+def get_vectorstore(force_reload: bool = False):
+    global _vectorstore
+    with _vectorstore_lock:
+        if _vectorstore is not None and not force_reload:
+            return _vectorstore
+            
+        logger.info("🚀 Starting: Connecting to Pinecone singleton...")
+        start_time = time.time()
+        embeddings = get_embeddings()
+        _vectorstore = PineconeVectorStore.from_existing_index(
+            index_name=PINECONE_INDEX_NAME,
+            embedding=embeddings
+        )
+        logger.info(f"✅ Finished: VectorStore connected in {time.time() - start_time:.2f}s")
+        return _vectorstore
 
 def get_llm():
     if not GROQ_API_KEY:
@@ -47,6 +64,7 @@ def get_llm():
 
 def extract_sql(text: str) -> str:
     """Extract SQL query from markdown-style code block."""
+    import re
     match = re.search(r"```sql\s*(.*?)```", text, re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -171,9 +189,9 @@ def reformulate_question(question: str, chat_history: list) -> str:
     })
     
     refined_question = response.content.strip()
-    print(f"📝 Reformulated: '{question}' -> '{refined_question}'")
+    logger.info(f"📝 Reformulated: '{question}' -> '{refined_question}'")
     if is_comparison:
-        print(f"   🔄 Comparison detected: {comp_type}")
+        logger.info(f"   🔄 Comparison detected: {comp_type}")
     return refined_question
 
 def generate_sql(question: str, chat_history: list = None) -> str:
@@ -196,7 +214,7 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     
     # Extract table names roughly for logging
     table_names = [doc.page_content.split('(')[0].strip() for doc in docs]
-    print(f"Retrieved {len(docs)} schema documents: {table_names}")
+    logger.info(f"Retrieved {len(docs)} schema documents: {table_names}")
     
     prompt = PromptTemplate.from_template("""
     You are an expert SQL assistant skilled in business analysis and comparisons.
@@ -251,9 +269,9 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     sql_start_marker = "```sql"
     sql_end_marker = "```"
     raw_content = result.content
-    print(f"LLM Raw Response:\n{raw_content}\n")
+    logger.debug(f"LLM Raw Response:\n{raw_content}\n")
     
     final_sql = extract_sql(raw_content)
-    print(f"Extracted SQL:\n{final_sql}\n")
+    logger.info(f"Extracted SQL:\n{final_sql}\n")
 
     return final_sql

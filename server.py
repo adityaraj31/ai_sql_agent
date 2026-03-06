@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -8,6 +8,11 @@ import os
 
 # Add src to path for imports
 sys.path.insert(0, ".")
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Initialize LangSmith Tracing
 from src.config import (
@@ -22,13 +27,14 @@ if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
     os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
     os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
     os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-    print("✅ LangSmith tracing enabled")
+    logger.info("✅ LangSmith tracing enabled")
 else:
-    print("ℹ️  LangSmith tracing disabled (set LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY in .env to enable)")
+    logger.info("ℹ️  LangSmith tracing disabled (set LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY in .env to enable)")
 
 from src.rag import generate_sql
 from src.database import run_sql_query
 from src.logger import log_query, get_logs, clear_logs
+from src.ingestion import build_index
 
 app = FastAPI(
     title="AI SQL Agent API",
@@ -133,6 +139,21 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # Log unexpected errors
         log_query(question, "", success=False, error_message=str(e))
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/embeddings")
+async def create_embeddings(background_tasks: BackgroundTasks) -> Dict[str, Any]:
+    """
+    Trigger the creation of embeddings for the database schema in the background.
+    """
+    try:
+        # Run the long-running task in the background
+        background_tasks.add_task(build_index)
+        return {
+            "success": True,
+            "message": "Embedding creation started in the background (this may take 1-2 minutes)"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start embedding creation: {str(e)}")
 
 @app.get("/history")
 async def get_history() -> Dict[str, Any]:

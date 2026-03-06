@@ -124,7 +124,7 @@ with st.sidebar:
     
     if st.button("🔥 Clear DB History", use_container_width=True):
         try:
-            response = requests.delete(f"{API_BASE_URL}/history", timeout=5)
+            response = requests.delete(f"{API_BASE_URL}/history", timeout=10)
             if response.status_code == 200:
                 st.success("History cleared!")
                 st.rerun()
@@ -133,10 +133,21 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error: {e}")
     
+    if st.button("🔄 Create Embeddings", use_container_width=True):
+        with st.spinner("Starting embedding process..."):
+            try:
+                response = requests.post(f"{API_BASE_URL}/embeddings", timeout=10)
+                if response.status_code == 200:
+                    st.info("Embedding creation started in the background. It will take a minute or two to complete.")
+                else:
+                    st.error(f"Failed to start embedding creation: {response.text}")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
     st.divider()
 
 try:
-    response = requests.get(f"{API_BASE_URL}/history", timeout=5)
+    response = requests.get(f"{API_BASE_URL}/history", timeout=10)
     if response.status_code == 200:
         history_data = response.json()
         logs = history_data.get("logs", [])
@@ -220,7 +231,7 @@ if prompt := st.chat_input("Ask a question data (e.g., 'Show top 5 customers')")
             response = requests.post(
                 f"{API_BASE_URL}/chat",
                 json=payload,
-                timeout=30
+                timeout=60
             )
             
             if response.status_code == 200:
