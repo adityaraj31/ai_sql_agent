@@ -1,11 +1,18 @@
 import sys
 import sqlite3
 import re
+import logging
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 from src.config import (
     DB_TYPE,
@@ -43,7 +50,7 @@ def get_db_connection():
         try:
             if POSTGRES_CONNECTION_STRING:
                 conn = psycopg2.connect(POSTGRES_CONNECTION_STRING)
-                print(f"✅ Connected to PostgreSQL via connection string")
+                logger.info("Connected to PostgreSQL via connection string")
             else:
                 conn = psycopg2.connect(
                     host=POSTGRES_HOST,
@@ -52,8 +59,8 @@ def get_db_connection():
                     password=POSTGRES_PASSWORD,
                     database=POSTGRES_DATABASE,
                 )
-                print(
-                    f"✅ Connected to PostgreSQL: {POSTGRES_USER}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"
+                logger.info(
+                    f"Connected to PostgreSQL: {POSTGRES_USER}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"
                 )
             return conn
         except PostgresError as e:
@@ -61,7 +68,7 @@ def get_db_connection():
     else:
         # SQLite (default)
         conn = sqlite3.connect(str(DB_PATH))
-        print(f"✅ Connected to SQLite: {DB_PATH}")
+        logger.info(f"Connected to SQLite: {DB_PATH}")
         return conn
 
 
@@ -220,6 +227,6 @@ def get_db_schema() -> Dict[str, List[str]]:
         conn.close()
 
     except Exception as e:
-        print(f"Error fetching schema: {e}")
+        logger.error(f"Error fetching schema: {e}")
 
     return schema

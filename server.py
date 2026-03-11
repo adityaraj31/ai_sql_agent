@@ -39,7 +39,7 @@ else:
 from src.rag import generate_sql
 from src.database import run_sql_query
 from src.logger import log_query, get_logs, clear_logs
-from src.ingestion import build_index
+from src.ingestion import build_schema_graph_neo4j
 
 app = FastAPI(
     title="AI SQL Agent API",
@@ -152,18 +152,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
 @app.post("/embeddings")
 async def create_embeddings(background_tasks: BackgroundTasks) -> Dict[str, Any]:
     """
-    Trigger the creation of embeddings for the database schema in the background.
+    Trigger the creation of schema graph in Neo4j in the background.
     """
     try:
         # Run the long-running task in the background
-        background_tasks.add_task(build_index)
+        background_tasks.add_task(build_schema_graph_neo4j)
         return {
             "success": True,
-            "message": "Embedding creation started in the background (this may take 1-2 minutes)",
+            "message": "Schema graph build started in the background (this may take 1-2 minutes)",
         }
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to start embedding creation: {str(e)}"
+            status_code=500, detail=f"Failed to start schema graph build: {str(e)}"
         )
 
 

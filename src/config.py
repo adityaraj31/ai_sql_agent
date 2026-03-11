@@ -22,6 +22,12 @@ POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "ai_sql_db")
 
+# Neo4j Configuration (GraphRAG)
+NEO4J_URI = os.getenv("NEO4J_URI", "")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
+
 # Logging
 LOG_FILE = BASE_DIR / "query_logs.json"
 

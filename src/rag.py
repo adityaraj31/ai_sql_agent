@@ -1,6 +1,5 @@
 import sys
 import logging
-import threading
 import re
 from pathlib import Path
 from typing import Optional
@@ -8,64 +7,20 @@ from typing import Optional
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from langchain_pinecone import PineconeVectorStore
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from src.config import (
     GROQ_API_KEY,
-    PINECONE_INDEX_NAME,
-    EMBEDDING_MODEL_NAME,
     LLM_MODEL_NAME,
     DB_TYPE,
 )
-
-import time
+from src.graphrag import retrieve_schema_context, get_schema_as_text
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-# Global singleton instances and locks for thread-safety
-_embeddings = None
-_vectorstore = None
-_embeddings_lock = threading.Lock()
-_vectorstore_lock = threading.Lock()
-
-
-def get_embeddings():
-    global _embeddings
-    with _embeddings_lock:
-        if _embeddings is not None:
-            return _embeddings
-
-        logger.info("🚀 Starting: Loading Embeddings singleton...")
-        start_time = time.time()
-        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-        logger.info(
-            f"✅ Finished: Embeddings loaded in {time.time() - start_time:.2f}s"
-        )
-        return _embeddings
-
-
-def get_vectorstore(force_reload: bool = False):
-    global _vectorstore
-    with _vectorstore_lock:
-        if _vectorstore is not None and not force_reload:
-            return _vectorstore
-
-        logger.info("🚀 Starting: Connecting to Pinecone singleton...")
-        start_time = time.time()
-        embeddings = get_embeddings()
-        _vectorstore = PineconeVectorStore.from_existing_index(
-            index_name=PINECONE_INDEX_NAME, embedding=embeddings
-        )
-        logger.info(
-            f"✅ Finished: VectorStore connected in {time.time() - start_time:.2f}s"
-        )
-        return _vectorstore
 
 
 def get_llm():
@@ -227,6 +182,7 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     """
     Generates a SQL query based on the user question and schema.
     Handles follow-up questions by reformulating them first.
+    Uses GraphRAG (Neo4j) for schema retrieval.
     """
     if chat_history is None:
         chat_history = []
@@ -234,16 +190,13 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     # Step 1: Reformulate the question (handling "it", "them", etc.)
     refined_question = reformulate_question(question, chat_history)
 
-    vectorstore = get_vectorstore()
-    retriever = vectorstore.as_retriever()
-
-    # Step 2: Retrieve relevant schema using the CLEAN question
-    docs = retriever.invoke(refined_question)
-    schema_text = "\n\n".join([doc.page_content for doc in docs])
-
-    # Extract table names roughly for logging
-    table_names = [doc.page_content.split("(")[0].strip() for doc in docs]
-    logger.info(f"Retrieved {len(docs)} schema documents: {table_names}")
+    # Step 2: Retrieve relevant schema using GraphRAG (Neo4j)
+    try:
+        schema_text = retrieve_schema_context(refined_question)
+        logger.info(f"📊 Retrieved schema from Neo4j graph")
+    except Exception as e:
+        logger.warning(f"GraphRAG retrieval failed: {e}, falling back to full schema")
+        schema_text = get_schema_as_text()
 
     # Build dialect-specific instructions
     if DB_TYPE == "postgres":

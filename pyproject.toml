@@ -23,4 +23,5 @@ dependencies = [
     "uvicorn>=0.41.0",
     "langchain-huggingface>=1.2.1",
     "psycopg2-binary>=2.9.9",
+    "neo4j>=5.0.0",
 ]
