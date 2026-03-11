@@ -1,4 +1,3 @@
-
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -15,19 +14,20 @@ DB_TYPE = os.getenv("DB_TYPE", "sqlite").lower()  # Default to SQLite
 # SQLite Configuration
 DB_PATH = BASE_DIR / "data" / "chinook.db"
 
-# MySQL Configuration
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "ai_sql_db")
+# PostgreSQL Configuration
+POSTGRES_CONNECTION_STRING = os.getenv("POSTGRES_CONNECTION_STRING", "")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
+POSTGRES_DATABASE = os.getenv("POSTGRES_DATABASE", "ai_sql_db")
 
 # Logging
 LOG_FILE = BASE_DIR / "query_logs.json"
 
 # API Keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") 
+# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 # LangSmith Tracing Configuration

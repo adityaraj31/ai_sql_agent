@@ -1,22 +1,31 @@
+import sys
 import logging
 import threading
 import re
+from pathlib import Path
 from typing import Optional
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from src.config import (
-    GROQ_API_KEY, 
-    PINECONE_INDEX_NAME, 
-    EMBEDDING_MODEL_NAME, 
-    LLM_MODEL_NAME
+    GROQ_API_KEY,
+    PINECONE_INDEX_NAME,
+    EMBEDDING_MODEL_NAME,
+    LLM_MODEL_NAME,
+    DB_TYPE,
 )
 
 import time
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Global singleton instances and locks for thread-safety
@@ -25,46 +34,50 @@ _vectorstore = None
 _embeddings_lock = threading.Lock()
 _vectorstore_lock = threading.Lock()
 
+
 def get_embeddings():
     global _embeddings
     with _embeddings_lock:
         if _embeddings is not None:
             return _embeddings
-            
+
         logger.info("🚀 Starting: Loading Embeddings singleton...")
         start_time = time.time()
         _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
-        logger.info(f"✅ Finished: Embeddings loaded in {time.time() - start_time:.2f}s")
+        logger.info(
+            f"✅ Finished: Embeddings loaded in {time.time() - start_time:.2f}s"
+        )
         return _embeddings
+
 
 def get_vectorstore(force_reload: bool = False):
     global _vectorstore
     with _vectorstore_lock:
         if _vectorstore is not None and not force_reload:
             return _vectorstore
-            
+
         logger.info("🚀 Starting: Connecting to Pinecone singleton...")
         start_time = time.time()
         embeddings = get_embeddings()
         _vectorstore = PineconeVectorStore.from_existing_index(
-            index_name=PINECONE_INDEX_NAME,
-            embedding=embeddings
+            index_name=PINECONE_INDEX_NAME, embedding=embeddings
         )
-        logger.info(f"✅ Finished: VectorStore connected in {time.time() - start_time:.2f}s")
+        logger.info(
+            f"✅ Finished: VectorStore connected in {time.time() - start_time:.2f}s"
+        )
         return _vectorstore
+
 
 def get_llm():
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY is not set")
-    return ChatGroq(
-        temperature=0,
-        model_name=LLM_MODEL_NAME,
-        api_key=GROQ_API_KEY
-    )
+    return ChatGroq(temperature=0, model_name=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
+
 
 def extract_sql(text: str) -> str:
     """Extract SQL query from markdown-style code block."""
     import re
+
     match = re.search(r"```sql\s*(.*?)```", text, re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -75,18 +88,17 @@ def extract_sql(text: str) -> str:
     return text
 
 
-
 def get_chat_history_str(chat_history: list) -> str:
     """
     Helper to format chat history for the prompt.
-    EXPECTS: list of dicts or tuples. 
+    EXPECTS: list of dicts or tuples.
     If dict: {'role': 'user', 'content': 'msg', 'sql': 'optional_sql'}
     """
     if not chat_history:
         return "No history."
-    
+
     formatted_history = []
-    for msg in chat_history[-6:]: 
+    for msg in chat_history[-6:]:
         # Handle both dicts and tuples for backward compatibility or ease of use
         if isinstance(msg, dict):
             role = msg.get("role", "unknown")
@@ -98,14 +110,15 @@ def get_chat_history_str(chat_history: list) -> str:
             sql = None
         else:
             continue
-            
+
         formatted_entry = f"{role.capitalize()}: {content}"
         if sql:
             formatted_entry += f"\n(Context SQL: {sql})"
-        
+
         formatted_history.append(formatted_entry)
-        
+
     return "\n".join(formatted_history)
+
 
 def detect_comparison_keywords(question: str) -> tuple:
     """
@@ -114,18 +127,31 @@ def detect_comparison_keywords(question: str) -> tuple:
     """
     question_lower = question.lower()
     keywords = {
-        'vs': 'versus', 'versus': 'versus', 'compared to': 'comparison',
-        'compared with': 'comparison', 'difference': 'difference', 'growth': 'growth',
-        'change': 'change', 'increased': 'trend', 'decreased': 'trend',
-        'higher': 'comparison', 'lower': 'comparison', 'improvement': 'trend',
-        'decline': 'trend', 'quarter': 'time_period', 'month': 'time_period',
-        'year': 'time_period', 'last': 'time_reference', 'previous': 'time_reference'
+        "vs": "versus",
+        "versus": "versus",
+        "compared to": "comparison",
+        "compared with": "comparison",
+        "difference": "difference",
+        "growth": "growth",
+        "change": "change",
+        "increased": "trend",
+        "decreased": "trend",
+        "higher": "comparison",
+        "lower": "comparison",
+        "improvement": "trend",
+        "decline": "trend",
+        "quarter": "time_period",
+        "month": "time_period",
+        "year": "time_period",
+        "last": "time_reference",
+        "previous": "time_reference",
     }
-    
+
     for keyword, comp_type in keywords.items():
         if keyword in question_lower:
             return True, comp_type
     return False, None
+
 
 def reformulate_question(question: str, chat_history: list) -> str:
     """
@@ -137,7 +163,7 @@ def reformulate_question(question: str, chat_history: list) -> str:
 
     history_str = get_chat_history_str(chat_history)
     is_comparison, comp_type = detect_comparison_keywords(question)
-    
+
     comparison_context = ""
     if is_comparison:
         comparison_context = f"""
@@ -150,7 +176,7 @@ def reformulate_question(question: str, chat_history: list) -> str:
       * "vs last quarter" → include current quarter AND previous quarter
       * "how much higher" → compare the two values
       * "growth vs last year" → year-over-year comparison"""
-    
+
     prompt = PromptTemplate.from_template("""
     You are a helpful assistant rewriting questions to be standalone, understanding context and comparisons.
     
@@ -178,21 +204,24 @@ def reformulate_question(question: str, chat_history: list) -> str:
     
     Output ONLY the reformulated question, no explanations.
     """)
-    
+
     llm = get_llm()
     chain = prompt | llm
-    
-    response = chain.invoke({
-        "history": history_str,
-        "question": question,
-        "comparison_context": comparison_context
-    })
-    
+
+    response = chain.invoke(
+        {
+            "history": history_str,
+            "question": question,
+            "comparison_context": comparison_context,
+        }
+    )
+
     refined_question = response.content.strip()
     logger.info(f"📝 Reformulated: '{question}' -> '{refined_question}'")
     if is_comparison:
         logger.info(f"   🔄 Comparison detected: {comp_type}")
     return refined_question
+
 
 def generate_sql(question: str, chat_history: list = None) -> str:
     """
@@ -201,49 +230,53 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     """
     if chat_history is None:
         chat_history = []
-        
+
     # Step 1: Reformulate the question (handling "it", "them", etc.)
     refined_question = reformulate_question(question, chat_history)
-    
+
     vectorstore = get_vectorstore()
     retriever = vectorstore.as_retriever()
-    
+
     # Step 2: Retrieve relevant schema using the CLEAN question
     docs = retriever.invoke(refined_question)
     schema_text = "\n\n".join([doc.page_content for doc in docs])
-    
+
     # Extract table names roughly for logging
-    table_names = [doc.page_content.split('(')[0].strip() for doc in docs]
+    table_names = [doc.page_content.split("(")[0].strip() for doc in docs]
     logger.info(f"Retrieved {len(docs)} schema documents: {table_names}")
-    
-    prompt = PromptTemplate.from_template("""
+
+    # Build dialect-specific instructions
+    if DB_TYPE == "postgres":
+        dialect_instructions = """
+    - **dialect: PostgreSQL**. Use `LIMIT n` or `FETCH FIRST n ROWS ONLY` for limiting results.
+    - **Date Handling**: For extracting year/month, use `EXTRACT(YEAR FROM DateColumn)` or `TO_CHAR(DateColumn, 'YYYY-MM')`. For year, use `EXTRACT(YEAR FROM DateColumn)`.
+    - **Case Sensitivity**: Use ILIKE for case-insensitive pattern matching.
+    - **Boolean**: PostgreSQL uses TRUE/FALSE (not 1/0).
+        """
+    else:
+        dialect_instructions = """
+    - **dialect: SQLite**. Do NOT use `TOP n`. Use `LIMIT n` at the end of the query.
+    - **Date Handling**: For extracting year/month, use SQLite's `strftime('%Y-%m', DateColumn)`. For year, use `strftime('%Y', DateColumn)`.
+        """
+
+    prompt = PromptTemplate.from_template(
+        """
     You are an expert SQL assistant skilled in business analysis and comparisons.
     Use the schema below to answer the user's question by writing a correct SQL query.
     
     Rules:
-    - GENERATE ONLY READ-ONLY SQL (SELECT, WITH, PRAGMA). DO NOT generate UPDATE, DELETE, DROP, INSERT, or ALTER statements.
-    - **dialect: SQLite**. Do NOT use `TOP n`. Use `LIMIT n` at the end of the query.
-    - **Date Handling**: For extracting year/month, use SQLite's `strftime('%Y-%m', DateColumn)`. For year, use `strftime('%Y', DateColumn)`.
+    - GENERATE ONLY READ-ONLY SQL (SELECT, WITH). DO NOT generate UPDATE, DELETE, DROP, INSERT, or ALTER statements.
+    """
+        + dialect_instructions
+        + """
     - **Comparisons**: When user asks to compare two periods/groups:
       * Use UNION or JOIN to show both periods side-by-side with clear aliases
       * Examples: 'current_period' vs 'previous_period', 'group_a' vs 'group_b', 'this_year' vs 'last_year'
       * Calculate differences/growth when asked: (current - previous) / previous * 100 AS growth_pct
       * Order results logically (e.g., chronologically or by metric value)
-    - **Temporal Queries**: 
-      * IMPORTANT: The database is HISTORICAL. It contains data only from **2009 to 2013**.
-      * If the user asks for "today", "now", or relative periods like "last quarter" without context, assume "today" is **2013-12-31**.
-      * "Last quarter" = Oct-Dec 2013.
-      * "Last year" = 2012.
-      * Be precise with date ranges and ALWAYS use `strftime` for SQLite date comparisons.
     - **Ambiguity**: If the user asks for "best" or "top" without a specific metric, assume "Total Sales" or "Count" with clear aliases.
     - **Refusal**: If the question is completely unrelated to the database (e.g., "capital of France"), return: `SELECT 'I can only answer questions about the connected database.' AS Service_Message;`
     - Only use columns and tables that exist in the schema.
-    - Do not assume columns like "total" exist — calculate them if needed.
-    - Use JOINs correctly based on foreign keys defined in the schema.
-    - Use sensible aliases for tables (e.g., first letter of table name) for clarity.
-    - Return ONLY the SQL query, in a code block formatted like ```sql ... ``` — nothing else.
-    - Only use columns and tables that exist in the schema.
-    - Do not assume columns like "total" exist — calculate them if needed.
     - Do not assume columns like "total" exist — calculate them if needed.
     - Use JOINs correctly based on foreign keys defined in the schema.
     - Use sensible aliases for tables (e.g., first letter of table name) for clarity.
@@ -256,21 +289,24 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     {question}
     
     Output the SQL inside a ```sql code block.
-    """)
-    
+    """
+    )
+
     llm = get_llm()
     chain = prompt | llm
-    
-    result = chain.invoke({
-        "schema": schema_text,
-        "question": refined_question # Pass the refined question to the generator
-    })
+
+    result = chain.invoke(
+        {
+            "schema": schema_text,
+            "question": refined_question,  # Pass the refined question to the generator
+        }
+    )
 
     sql_start_marker = "```sql"
     sql_end_marker = "```"
     raw_content = result.content
     logger.debug(f"LLM Raw Response:\n{raw_content}\n")
-    
+
     final_sql = extract_sql(raw_content)
     logger.info(f"Extracted SQL:\n{final_sql}\n")
 
