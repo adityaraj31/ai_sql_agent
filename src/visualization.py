@@ -19,7 +19,7 @@ def get_visualization_llm():
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY is not set")
 
-    return ChatGroq(temperature=0, model_name=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
+    return ChatGroq(temperature=0, model=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
 
 
 def analyze_data_for_chart(question: str, df: pd.DataFrame) -> Optional[Dict[str, Any]]:

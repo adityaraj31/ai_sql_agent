@@ -26,13 +26,11 @@ logger = logging.getLogger(__name__)
 def get_llm():
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY is not set")
-    return ChatGroq(temperature=0, model_name=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
+    return ChatGroq(temperature=0, model=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
 
 
 def extract_sql(text: str) -> str:
     """Extract SQL query from markdown-style code block."""
-    import re
-
     match = re.search(r"```sql\s*(.*?)```", text, re.DOTALL)
     if match:
         return match.group(1).strip()
