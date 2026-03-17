@@ -1,148 +1,214 @@
-# 🧠 AI SQL Agent
+# AI SQL Agent
 
-A GenAI-powered intelligent SQL assistant that converts natural language questions into executable SQL queries, provides autonomous visualizations, and maintains conversational context.
+A GenAI-powered intelligent SQL assistant that converts natural language questions into executable SQL queries, provides autonomous visualizations, and maintains conversational context with session history.
 
-> **Built using:** LangChain + Neo4j + Groq + Streamlit  
-> **Backend:** Python + SQLite (Chinook DB)
+> **Built using:** LangChain + Neo4j + Groq + React  
+> **Backend:** Python + FastAPI + PostgreSQL  
+> **Frontend:** React + Vite + TypeScript
 
 ---
 
-## 🚀 Problem Statement
+## Problem Statement
 
 Non-technical stakeholders (like managers, marketers, and analysts) often struggle to retrieve insights from raw databases because they don't know SQL.
 
-### 🔍 Example Problems:
+### Example Problems
 
-> "Show me the top five customers by total invoice value"  
-> "How many orders did we receive from each country?"  
-> "Show total sales grouped by country"
+> "Show me top customers by total spending"  
+> "How many active subscriptions do we have?"  
+> "What's the monthly revenue trend?"
 
 Manually writing SQL queries for such questions is slow, repetitive, and requires technical knowledge.
 
 ---
 
-## ✅ Use Case
+## Use Case
 
 This tool bridges the gap between business users and SQL databases by allowing anyone to ask data questions in plain English.
 
-### 💼 Ideal For:
+### Ideal For
 
 - Business dashboards
 - Internal analytics tools
 - Data teams working with non-technical users
-- Students and developers building RAG-based AI apps
+- SaaS analytics with subscription data
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Component     | Tool / Framework                                       |
 | ------------- | ------------------------------------------------------ |
-| LLM           | [Groq](https://groq.com/) (Llama3.3 70B Turbo)         |
-| RAG Framework | [LangChain](https://www.langchain.com/)                |
-| Graph DB      | [Neo4j](https://neo4j.com/) (Knowledge Graph for Schema) |
-| Tracing       | [LangSmith](https://smith.langchain.com/)              |
-| Frontend      | [Streamlit](https://streamlit.io/)                     |
-| Database      | Chinook SQLite (sample DB)                             |
+| LLM           | OpenRouter (OpenAI GPT-4o-mini)                       |
+| RAG Framework | LangChain                                             |
+| Graph DB      | Neo4j (Knowledge Graph for Schema)                    |
+| Backend       | FastAPI (Python)                                      |
+| Frontend      | React + Vite + TypeScript                             |
+| Database      | PostgreSQL (Supabase)                                 |
+| Chat Storage  | PostgreSQL (Separate database for sessions)           |
 
 ---
 
-## 🧩 Folder Structure
+## Features
+
+- **Natural Language to SQL** - Ask questions in plain English, get SQL results
+- **GraphRAG Schema Retrieval** - Neo4j-powered schema understanding
+- **Session Management** - Conversations stored with LLM-generated titles
+- **Chat History** - Load previous conversations from sidebar
+- **Golden SQL Examples** - Few-shot learning for complex queries
+- **SQL Safety** - Read-only queries only, validation before execution
+- **Comparison Queries** - Year-over-year, month-over-month analysis
+
+---
+
+## Folder Structure
 
 ```
 ai-sql-agent/
-├── data/
-│   └── chinook.db              # SQLite database
 ├── src/
-│   ├── ingestion.py            # Vector store creation/doc embedding
-│   ├── rag.py                  # Core RAG logic & SQL generation
+│   ├── config.py               # Configuration & environment variables
 │   ├── database.py             # Database operations & safety checks
-│   ├── logger.py               # Query logging
-│   ├── visualization.py        # Dynamic chart generation
-│   └── config.py               # Configuration constants
-├── app.py                      # Main Streamlit application
+│   ├── graphrag.py             # Neo4j GraphRAG for schema retrieval
+│   ├── ingestion.py            # Schema graph building
+│   ├── llm.py                  # Shared LLM singleton
+│   ├── logger.py               # Chat session storage (PostgreSQL)
+│   ├── rag.py                  # Core RAG logic & SQL generation
+│   └── visualization.py        # Dynamic chart generation (Plotly)
+├── frontend/
+│   ├── src/
+│   │   ├── components/         # React components
+│   │   ├── services/           # API calls
+│   │   ├── types/              # TypeScript types
+│   │   ├── App.tsx             # Main application
+│   │   └── App.css             # Styles
+│   └── package.json
 ├── server.py                   # FastAPI backend
-├── requirements.txt            # Project dependencies
-└── .env                        # API Keys (Groq, Neo4j, LangSmith)
+├── pyproject.toml              # Python dependencies
+└── .env                       # Environment variables
 ```
 
 ---
 
-## 🔍 LangSmith Tracing & Monitoring
+## Getting Started
 
-Full observability is integrated via **LangSmith** to monitor LLM latency, token usage, and RAG retrieval accuracy.
+### Prerequisites
 
-### ✨ Highlights:
-- **Trace Visibility**: Inspect every step of the reformulation and generation chain.
-- **Performance Metrics**: Monitor token usage and latency for Llama3.3.
-- **Error Tracking**: Identify schema retrieval gaps or SQL syntax errors instantly.
+- Python 3.13+
+- Node.js 18+
+- PostgreSQL database (Supabase)
+- Neo4j database
 
----
-
-## ▶️ How to Run Locally
+### Installation
 
 1. **Clone the repo**
    ```bash
-   git clone https://github.com/adityaraj31/ai-sql-agent.git
    cd ai-sql-agent
    ```
 
-2. **Install Dependencies** (Recommended: [uv](https://github.com/astral-sh/uv))
+2. **Install Python dependencies**
    ```bash
-   uv pip install -r requirements.txt
+   uv sync
+   # or
+   pip install -r requirements.txt
    ```
 
-3. **Set Environment Variables**
-   Create a `.env` file:
-   ```env
-   GROQ_API_KEY=your_groq_api_key
-   
-   # Neo4j (GraphRAG for schema retrieval)
-   NEO4J_URI=bolt://localhost:7687
-   NEO4J_USERNAME=neo4j
-   NEO4J_PASSWORD=your_password
-   
-   # Tracing (Optional)
-   LANGCHAIN_TRACING_V2=true
-   LANGCHAIN_API_KEY=your_langsmith_api_key
-   LANGCHAIN_PROJECT=ai-sql-agent
+3. **Install frontend dependencies**
+   ```bash
+   cd frontend
+   npm install
    ```
 
-4. **Initialize Data**
+### Environment Variables
+
+Create a `.env` file:
+
+```env
+# OpenRouter (OpenAI GPT-4o-mini)
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+# Database Configuration
+DB_TYPE=postgres
+POSTGRES_CONNECTION_STRING=postgresql://postgres:password@host:5432/postgres
+
+# Chat History Database
+CHAT_POSTGRES_CONNECTION_STRING=postgresql://postgres:password@host:5432/postgres
+
+# Neo4j Configuration (GraphRAG)
+NEO4J_URI=neo4j+s://your-neo4j-uri
+NEO4J_USERNAME=your_username
+NEO4J_PASSWORD=your_password
+NEO4J_DATABASE=neo4j
+
+# Frontend CORS (optional)
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# LangSmith Tracing (commented out by default)
+# LANGCHAIN_TRACING_V2=true
+# LANGCHAIN_API_KEY=your_langsmith_api_key
+# LANGCHAIN_PROJECT=ai-sql-agent
+```
+
+### Running the Application
+
+1. **Start the backend**
    ```bash
-   python src/ingestion.py
+   uv run python server.py
    ```
 
-5. **Start Backend & App**
-   Run the FastAPI server and Streamlit app:
+2. **Start the frontend** (in a new terminal)
    ```bash
-   # Terminal 1
-   python server.py
-   
-   # Terminal 2
-   streamlit run app.py
+   cd frontend
+   npm run dev
    ```
+
+3. **Build schema graph** (first time or to refresh)
+   - Click "Create Embeddings" button in the sidebar
+   - Or call the API: `POST /embeddings`
+
+4. **Open browser**
+   - Frontend: http://localhost:5173
 
 ---
 
-## Task to complete
+## API Endpoints
 
-After the initial showcase, the following advanced agentic features are planned:
-- [ ] **Agentic Self-Correction**: Implement a reflection loop to self-heal SQL syntax errors in real-time.
-- [ ] **Dynamic Few-Shot RAG**: Inject similar "Golden SQL" examples into the prompt for complex query accuracy.
-- [ ] **SQL Explainability**: Add a Chain-of-Thought toggle to explain the logic behind generated queries.
-- [ ] **Security Auditor Agent**: A dedicated LLM layer to validate SQL safety beyond standard regex checks.
-
----
-
-## 🙋‍♂️ Author
-
-**Aditya Raj Singh**  
-📍 GenAI & MERN Stack Developer  
-🔗 [LinkedIn](https://linkedin.com/in/adityarajsingh31)  
-🚀 Deep Learning | Multi-Agent Systems | RAG Pipelines
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| POST | `/chat` | Send a chat message |
+| GET | `/history` | List all chat sessions |
+| GET | `/history/{session_id}` | Get messages for a session |
+| DELETE | `/history/{session_id}` | Delete a session |
+| DELETE | `/history` | Clear all history |
+| POST | `/embeddings` | Build schema graph (background) |
+| GET | `/embeddings/status` | Check embedding status |
 
 ---
 
-## ⭐️ Support the Project
-If you find this project useful, please give it a ⭐️ on GitHub and connect with me for collaborations!
+## Database Schema
+
+The agent works with any PostgreSQL database. Example tables:
+
+- `users` - User information
+- `plans` - Subscription plans
+- `subscriptions` - User subscriptions
+- `payments` - Payment records
+
+---
+
+## Architecture
+
+1. **User Question** → FastAPI endpoint
+2. **Question Reformulation** → LLM converts follow-up questions to standalone
+3. **Schema Retrieval** → Neo4j GraphRAG finds relevant tables/columns
+4. **SQL Generation** → LLM generates SQL with Golden Examples
+5. **Safety Check** → Validate read-only queries
+6. **Execution** → Run SQL against PostgreSQL
+7. **Storage** → Save conversation to PostgreSQL
+8. **Response** → Return results to frontend
+
+---
+
+## License
+
+MIT License

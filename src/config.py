@@ -38,7 +38,8 @@ NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 # Chat history is now stored in PostgreSQL (see CHAT_POSTGRES_CONNECTION_STRING)
 
 # API Keys
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # Legacy - not used
 
 # LangSmith Tracing Configuration (commented out)
 # LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
@@ -48,7 +49,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Models
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-LLM_MODEL_NAME = "llama-3.3-70b-versatile"
+LLM_MODEL_NAME = "openai/gpt-4o-mini"
 
 # Security
 ALLOWED_ORIGINS = os.getenv(

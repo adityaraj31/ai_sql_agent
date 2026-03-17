@@ -8,12 +8,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from langchain_core.prompts import PromptTemplate
-from langchain_groq import ChatGroq
-from src.config import (
-    GROQ_API_KEY,
-    LLM_MODEL_NAME,
-    DB_TYPE,
-)
+from src.config import DB_TYPE
 from src.graphrag import (
     retrieve_schema_context,
     get_full_schema_text as get_schema_as_text,
@@ -64,12 +59,6 @@ Output ONLY the title, no quotes or explanation.
     except Exception as e:
         logger.warning(f"Failed to generate title: {e}")
         return first_message[:40] + "..." if len(first_message) > 40 else first_message
-
-
-def get_llm():
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY is not set")
-    return ChatGroq(temperature=0, model=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
 
 
 def extract_sql(text: str) -> str:
@@ -310,10 +299,110 @@ def generate_sql(question: str, chat_history: list = None) -> str:
     - **Date Handling**: Use SQLite's `strftime('%Y-%m', col)` for year/month.
         """
 
+    # Golden SQL examples for complex query patterns
+    golden_examples = """
+    ## Golden SQL Examples (reference these patterns for similar questions):
+
+    ### 1. Year-over-Year Comparison
+    Question: "Compare revenue this year vs last year"
+    ```sql
+    SELECT 
+        EXTRACT(YEAR FROM payment_date) AS year,
+        SUM(amount) AS total_revenue
+    FROM payments
+    WHERE status = 'completed'
+    GROUP BY EXTRACT(YEAR FROM payment_date)
+    ORDER BY year
+    ```
+
+    ### 2. Month-over-Month Trend
+    Question: "Show monthly revenue trend for 2024"
+    ```sql
+    SELECT 
+        strftime('%Y-%m', payment_date) AS month,
+        SUM(amount) AS monthly_revenue
+    FROM payments
+    WHERE status = 'completed' 
+        AND strftime('%Y', payment_date) = '2024'
+    GROUP BY strftime('%Y-%m', payment_date)
+    ORDER BY month
+    ```
+
+    ### 3. Top N with Aggregation
+    Question: "Top 10 customers by total spending"
+    ```sql
+    SELECT 
+        c.id AS customer_id,
+        c.full_name,
+        SUM(p.amount) AS total_spent
+    FROM customers c
+    JOIN subscriptions s ON s.user_id = c.id
+    JOIN payments p ON p.subscription_id = s.id
+    WHERE p.status = 'completed'
+    GROUP BY c.id, c.full_name
+    ORDER BY total_spent DESC
+    LIMIT 10
+    ```
+
+    ### 4. Subscription Status Distribution
+    Question: "Count of active vs inactive subscriptions"
+    ```sql
+    SELECT 
+        status,
+        COUNT(*) AS subscription_count
+    FROM subscriptions
+    GROUP BY status
+    ```
+
+    ### 5. Revenue by Plan Type
+    Question: "Revenue breakdown by subscription plan"
+    ```sql
+    SELECT 
+        pl.name AS plan_name,
+        COUNT(s.id) AS subscriber_count,
+        SUM(pl.price_monthly) AS monthly_revenue
+    FROM subscriptions s
+    JOIN plans pl ON pl.id = s.plan_id
+    WHERE s.status = 'active'
+    GROUP BY pl.id, pl.name
+    ORDER BY monthly_revenue DESC
+    ```
+
+    ### 6. New Users per Month
+    Question: "Monthly new user registration"
+    ```sql
+    SELECT 
+        strftime('%Y-%m', created_at) AS month,
+        COUNT(*) AS new_users
+    FROM users
+    GROUP BY strftime('%Y-%m', created_at)
+    ORDER BY month DESC
+    ```
+
+    ### 7. Average Order Value by Customer
+    Question: "Customers with highest average order value"
+    ```sql
+    SELECT 
+        c.id,
+        c.full_name,
+        AVG(p.amount) AS avg_order_value,
+        COUNT(p.id) AS total_orders
+    FROM customers c
+    JOIN subscriptions s ON s.user_id = c.id
+    JOIN payments p ON p.subscription_id = s.id
+    WHERE p.status = 'completed'
+    GROUP BY c.id, c.full_name
+    HAVING COUNT(p.id) >= 3
+    ORDER BY avg_order_value DESC
+    LIMIT 20
+    ```
+    """
+
     prompt = PromptTemplate.from_template(
         """
     You are an expert SQL assistant skilled in business analysis and comparisons.
     Use the schema below to answer the user's question by writing a correct SQL query.
+    {golden_examples}
 
     Rules:
     - GENERATE ONLY READ-ONLY SQL (SELECT, WITH). DO NOT generate UPDATE, DELETE, DROP, INSERT, or ALTER.
@@ -348,6 +437,7 @@ def generate_sql(question: str, chat_history: list = None) -> str:
             "schema": schema_text,
             "previous_sql": previous_sql_block,
             "question": refined_question,
+            "golden_examples": golden_examples,
         }
     )
 
