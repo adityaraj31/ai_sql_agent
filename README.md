@@ -2,7 +2,7 @@
 
 A GenAI-powered intelligent SQL assistant that converts natural language questions into executable SQL queries, provides autonomous visualizations, and maintains conversational context.
 
-> **Built using:** LangChain + Pinecone + Groq + Streamlit  
+> **Built using:** LangChain + Neo4j + Groq + Streamlit  
 > **Backend:** Python + SQLite (Chinook DB)
 
 ---
@@ -40,7 +40,7 @@ This tool bridges the gap between business users and SQL databases by allowing a
 | ------------- | ------------------------------------------------------ |
 | LLM           | [Groq](https://groq.com/) (Llama3.3 70B Turbo)         |
 | RAG Framework | [LangChain](https://www.langchain.com/)                |
-| Vector DB     | [Pinecone](https://www.pinecone.io/) (Cloud Vector DB) |
+| Graph DB      | [Neo4j](https://neo4j.com/) (Knowledge Graph for Schema) |
 | Tracing       | [LangSmith](https://smith.langchain.com/)              |
 | Frontend      | [Streamlit](https://streamlit.io/)                     |
 | Database      | Chinook SQLite (sample DB)                             |
@@ -63,7 +63,7 @@ ai-sql-agent/
 ├── app.py                      # Main Streamlit application
 ├── server.py                   # FastAPI backend
 ├── requirements.txt            # Project dependencies
-└── .env                        # API Keys (Groq, Pinecone, LangSmith)
+└── .env                        # API Keys (Groq, Neo4j, LangSmith)
 ```
 
 ---
@@ -96,8 +96,11 @@ Full observability is integrated via **LangSmith** to monitor LLM latency, token
    Create a `.env` file:
    ```env
    GROQ_API_KEY=your_groq_api_key
-   PINECONE_API_KEY=your_pinecone_api_key
-   PINECONE_INDEX_NAME=your_index_name
+   
+   # Neo4j (GraphRAG for schema retrieval)
+   NEO4J_URI=bolt://localhost:7687
+   NEO4J_USERNAME=neo4j
+   NEO4J_PASSWORD=your_password
    
    # Tracing (Optional)
    LANGCHAIN_TRACING_V2=true

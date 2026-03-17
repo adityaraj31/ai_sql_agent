@@ -9,17 +9,8 @@ from typing import Optional, Dict, Any
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
-from src.config import GROQ_API_KEY, LLM_MODEL_NAME
-
-
-def get_visualization_llm():
-    """Returns an instance of ChatGroq for visualization tasks."""
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY is not set")
-
-    return ChatGroq(temperature=0, model=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
+from src.llm import get_llm
 
 
 def analyze_data_for_chart(question: str, df: pd.DataFrame) -> Optional[Dict[str, Any]]:
@@ -66,7 +57,7 @@ def analyze_data_for_chart(question: str, df: pd.DataFrame) -> Optional[Dict[str
     }}
     """)
 
-    llm = get_visualization_llm()
+    llm = get_llm()
     chain = prompt | llm
 
     try:

@@ -4,10 +4,12 @@ export interface ChatMessage {
   sql?: string;
   results?: Record<string, unknown>[];
   chart?: ChartConfig | null;
+  is_relevant?: boolean;
 }
 
 export interface ChatRequest {
   question: string;
+  session_id?: string;
   chat_history: ChatMessage[];
 }
 
@@ -17,20 +19,29 @@ export interface ChatResponse {
   results?: Record<string, unknown>[];
   error?: string;
   message: string;
+  is_relevant?: boolean;
 }
 
-export interface QueryLog {
-  timestamp: string;
-  question: string;
-  sql_query: string;
-  success: boolean;
-  error_message?: string;
+export interface ChatSession {
+  session_id: string;
+  title: string | null;
+  created_at: string;
+  message_count: number;
 }
 
 export interface HistoryResponse {
   success: boolean;
   count: number;
-  logs: QueryLog[];
+  logs: ChatSession[];
+}
+
+export interface QueryLog {
+  session_id: string;
+  title: string | null;
+  created_at: string;
+  message_count: number;
+  question?: string;
+  success?: boolean;
 }
 
 export interface EmbeddingsResponse {

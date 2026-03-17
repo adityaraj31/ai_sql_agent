@@ -23,15 +23,17 @@ from typing import Optional
 import psycopg2
 from neo4j import GraphDatabase, Driver
 from langchain_core.prompts import PromptTemplate
+from langchain_groq import ChatGroq
 
 from src.config import (
     NEO4J_URI,
     NEO4J_USERNAME,
     NEO4J_PASSWORD,
     NEO4J_DATABASE,
-    SUPABASE_DB_URL,
+    LLM_MODEL_NAME,
+    GROQ_API_KEY,
+    SUPABASE_DB_URL,  # e.g. postgresql://user:pass@host:5432/postgres
 )
-from src.llm import get_llm
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging
@@ -42,8 +44,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DB_LABEL = "saas_analytics"  # label used for the root Database node
-PG_SCHEMA = "public"  # PostgreSQL schema to introspect
+DB_LABEL  = "saas_analytics"   # label used for the root Database node
+PG_SCHEMA = "public"           # PostgreSQL schema to introspect
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Neo4j driver  (singleton, thread-safe)
@@ -118,7 +120,9 @@ def fetch_schema_from_db() -> dict[str, list[str]]:
         with conn.cursor() as cur:
             cur.execute(sql, (PG_SCHEMA,))
             for table, column, dtype in cur.fetchall():
-                schema.setdefault(table, []).append(f"{column} ({dtype.upper()})")
+                schema.setdefault(table, []).append(
+                    f"{column} ({dtype.upper()})"
+                )
 
     logger.info("Fetched schema: %d tables.", len(schema))
     return schema
@@ -126,9 +130,11 @@ def fetch_schema_from_db() -> dict[str, list[str]]:
 
 def fetch_foreign_keys_from_db() -> list[dict[str, str]]:
     """
-    Read every FK relationship from PostgreSQL's constraint metadata.
+    Read every FK relationship directly from pg_catalog.
 
-    Uses information_schema only — no column-name heuristics.
+    information_schema joins are unreliable on Supabase (permission/view
+    resolution issues). pg_catalog is the authoritative source and always
+    returns the correct constraints.
 
     Returns
     -------
@@ -136,18 +142,20 @@ def fetch_foreign_keys_from_db() -> list[dict[str, str]]:
     """
     sql = """
         SELECT
-            kcu.table_name   AS source_table,
-            kcu.column_name  AS source_column,
-            ccu.table_name   AS target_table,
-            ccu.column_name  AS target_column
-        FROM information_schema.referential_constraints rc
-        JOIN information_schema.key_column_usage kcu
-             ON  kcu.constraint_name   = rc.constraint_name
-             AND kcu.constraint_schema = rc.constraint_schema
-        JOIN information_schema.constraint_column_usage ccu
-             ON  ccu.constraint_name   = rc.unique_constraint_name
-             AND ccu.constraint_schema = rc.constraint_schema
-        WHERE rc.constraint_schema = %s
+            src_tbl.relname  AS source_table,
+            src_col.attname  AS source_column,
+            tgt_tbl.relname  AS target_table,
+            tgt_col.attname  AS target_column
+        FROM pg_constraint c
+        JOIN pg_class     src_tbl ON src_tbl.oid = c.conrelid
+        JOIN pg_class     tgt_tbl ON tgt_tbl.oid = c.confrelid
+        JOIN pg_attribute src_col ON src_col.attrelid = c.conrelid
+                                 AND src_col.attnum = ANY(c.conkey)
+        JOIN pg_attribute tgt_col ON tgt_col.attrelid = c.confrelid
+                                 AND tgt_col.attnum = ANY(c.confkey)
+        JOIN pg_namespace ns      ON ns.oid = src_tbl.relnamespace
+        WHERE c.contype = 'f'
+          AND ns.nspname = %s
         ORDER BY source_table, source_column
     """
     foreign_keys: list[dict[str, str]] = []
@@ -157,9 +165,9 @@ def fetch_foreign_keys_from_db() -> list[dict[str, str]]:
             for src_table, src_col, tgt_table, tgt_col in cur.fetchall():
                 foreign_keys.append(
                     {
-                        "source_table": src_table,
+                        "source_table":  src_table,
                         "source_column": src_col,
-                        "target_table": tgt_table,
+                        "target_table":  tgt_table,
                         "target_column": tgt_col,
                     }
                 )
@@ -179,8 +187,8 @@ def clear_graph() -> None:
 
 def _parse_column(col_str: str) -> tuple[str, str]:
     """'col_name (TYPE)' → ('col_name', 'TYPE')"""
-    parts = col_str.rsplit("(", 1)
-    name = parts[0].strip()
+    parts    = col_str.rsplit("(", 1)
+    name     = parts[0].strip()
     col_type = parts[1].rstrip(")").strip() if len(parts) > 1 else "UNKNOWN"
     return name, col_type
 
@@ -197,6 +205,7 @@ def build_graph(
     Relationships : HAS_TABLE  HAS_COLUMN  FK_TO  RELATED_TO
     """
     with get_driver().session() as session:
+
         # Root node
         session.run("MERGE (d:Database {name: $name})", name=db_label)
 
@@ -208,8 +217,7 @@ def build_graph(
                 MERGE (t:Table {name: $table})
                 MERGE (d)-[:HAS_TABLE]->(t)
                 """,
-                db=db_label,
-                table=table,
+                db=db_label, table=table,
             )
             for col_str in columns:
                 col_name, col_type = _parse_column(col_str)
@@ -220,9 +228,7 @@ def build_graph(
                     SET   c.type = $col_type
                     MERGE (t)-[:HAS_COLUMN]->(c)
                     """,
-                    table=table,
-                    col=col_name,
-                    col_type=col_type,
+                    table=table, col=col_name, col_type=col_type,
                 )
 
         # Foreign keys  (sourced directly from PostgreSQL — always accurate)
@@ -234,10 +240,8 @@ def build_graph(
                 MATCH (tgt:Column {name: $tgt_col, table: $tgt_table})
                 MERGE (src)-[:FK_TO]->(tgt)
                 """,
-                src_col=fk["source_column"],
-                src_table=fk["source_table"],
-                tgt_col=fk["target_column"],
-                tgt_table=fk["target_table"],
+                src_col=fk["source_column"], src_table=fk["source_table"],
+                tgt_col=fk["target_column"], tgt_table=fk["target_table"],
             )
             # Table-level shortcut (handy for graph traversal queries)
             session.run(
@@ -271,7 +275,8 @@ def get_full_schema_text() -> str:
         lines = []
         for record in result:
             cols = ", ".join(
-                f"{c['name']} ({c['type']})" for c in record["columns"] if c["name"]
+                f"{c['name']} ({c['type']})"
+                for c in record["columns"] if c["name"]
             )
             lines.append(f"Table {record['table']}: {cols}")
     return "\n".join(lines)
@@ -299,7 +304,8 @@ def get_schema_for_tables(table_names: list[str]) -> str:
         lines = []
         for record in result:
             cols = ", ".join(
-                f"{c['name']} ({c['type']})" for c in record["columns"] if c["name"]
+                f"{c['name']} ({c['type']})"
+                for c in record["columns"] if c["name"]
             )
             lines.append(f"Table {record['table']}: {cols}")
 
@@ -324,13 +330,19 @@ def get_schema_for_tables(table_names: list[str]) -> str:
 
 def _get_all_table_names() -> list[str]:
     with get_driver().session() as session:
-        record = session.run("MATCH (t:Table) RETURN collect(t.name) AS names").single()
+        record = session.run(
+            "MATCH (t:Table) RETURN collect(t.name) AS names"
+        ).single()
         return record["names"] if record else []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LLM-powered context retrieval
 # ─────────────────────────────────────────────────────────────────────────────
+def get_llm() -> ChatGroq:
+    if not GROQ_API_KEY:
+        raise ValueError("GROQ_API_KEY is not configured.")
+    return ChatGroq(temperature=0, model=LLM_MODEL_NAME, api_key=GROQ_API_KEY)
 
 
 def retrieve_schema_context(user_query: str) -> str:
@@ -367,7 +379,7 @@ def initialise_graph(clear_first: bool = True) -> None:
     """
     if clear_first:
         clear_graph()
-    schema = fetch_schema_from_db()
+    schema       = fetch_schema_from_db()
     foreign_keys = fetch_foreign_keys_from_db()
     build_graph(schema, foreign_keys)
     logger.info("SaaS Analytics graph is ready.")

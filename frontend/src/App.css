@@ -269,19 +269,79 @@ body {
   border-radius: 6px;
 }
 
-.sql-label {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
-}
-
 .sql-query pre {
   font-family: 'Fira Code', monospace;
   font-size: 0.875rem;
   white-space: pre-wrap;
   word-break: break-all;
   color: var(--accent-green);
+}
+
+.sql-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.sql-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+}
+
+.copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Out of Scope Alert */
+.out-of-scope-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  color: #ef4444;
+  margin-top: 0.75rem;
+}
+
+.out-of-scope-alert svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.out-of-scope-content {
+  flex: 1;
+}
+
+.out-of-scope-content strong {
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.out-of-scope-content p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
 }
 
 /* Results Table */

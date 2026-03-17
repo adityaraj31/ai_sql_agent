@@ -2,13 +2,15 @@ import sys
 import sqlite3
 import re
 import logging
+import threading
+from decimal import Decimal
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -25,208 +27,218 @@ from src.config import (
     POSTGRES_DATABASE,
 )
 
-# Try to import PostgreSQL connector
 try:
     import psycopg2
     from psycopg2 import Error as PostgresError
+    from psycopg2 import pool
 
     POSTGRES_AVAILABLE = True
 except ImportError:
     POSTGRES_AVAILABLE = False
     PostgresError = Exception
+    pool = None
+
+_postgres_pool = None
+_pool_lock = threading.Lock()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Serialization fix
+# ─────────────────────────────────────────────────────────────────────────────
+def _serialize_value(value: Any) -> Any:
+    """
+    Convert psycopg2 types that are not JSON-serializable into plain Python types.
+
+    Root cause of Bug 2: PostgreSQL NUMERIC/DECIMAL columns come back as
+    Python Decimal objects, and DATE/TIMESTAMP columns come back as date/datetime.
+    Neither is handled by the default JSON encoder, so json.dumps() in
+    logger.add_message() raised 'Object of type Decimal is not JSON serializable'.
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    return value
+
+
+def _serialize_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: _serialize_value(v) for k, v in row.items()}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Connection pool
+# ─────────────────────────────────────────────────────────────────────────────
+def _init_postgres_pool():
+    global _postgres_pool
+    if _postgres_pool is not None:
+        return _postgres_pool
+
+    with _pool_lock:
+        if _postgres_pool is not None:
+            return _postgres_pool
+
+        if POSTGRES_CONNECTION_STRING:
+            _postgres_pool = pool.ThreadedConnectionPool(
+                minconn=2, maxconn=10, dsn=POSTGRES_CONNECTION_STRING
+            )
+            logger.info("PostgreSQL connection pool initialized (via connection string)")
+        else:
+            _postgres_pool = pool.ThreadedConnectionPool(
+                minconn=2,
+                maxconn=10,
+                host=POSTGRES_HOST,
+                port=POSTGRES_PORT,
+                user=POSTGRES_USER,
+                password=POSTGRES_PASSWORD,
+                database=POSTGRES_DATABASE,
+            )
+            logger.info(
+                "PostgreSQL connection pool initialized: "
+                "%s@%s:%s/%s", POSTGRES_USER, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE
+            )
+
+    return _postgres_pool
 
 
 def get_db_connection():
-    """
-    Get a database connection based on configured DB_TYPE.
-    Supports SQLite and PostgreSQL (via connection string or individual params).
-    """
     if DB_TYPE == "postgres":
         if not POSTGRES_AVAILABLE:
             raise ImportError(
-                "psycopg2 is required for PostgreSQL support. Install with: pip install psycopg2-binary"
+                "psycopg2 is required for PostgreSQL. Install: pip install psycopg2-binary"
             )
-
         try:
-            if POSTGRES_CONNECTION_STRING:
-                conn = psycopg2.connect(POSTGRES_CONNECTION_STRING)
-                logger.info("Connected to PostgreSQL via connection string")
-            else:
-                conn = psycopg2.connect(
-                    host=POSTGRES_HOST,
-                    port=POSTGRES_PORT,
-                    user=POSTGRES_USER,
-                    password=POSTGRES_PASSWORD,
-                    database=POSTGRES_DATABASE,
-                )
-                logger.info(
-                    f"Connected to PostgreSQL: {POSTGRES_USER}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DATABASE}"
-                )
-            return conn
+            return _init_postgres_pool().getconn()
         except PostgresError as e:
-            raise ConnectionError(f"Failed to connect to PostgreSQL: {str(e)}")
+            raise ConnectionError(f"Failed to connect to PostgreSQL: {e}")
     else:
-        # SQLite (default)
         conn = sqlite3.connect(str(DB_PATH))
-        logger.info(f"Connected to SQLite: {DB_PATH}")
+        logger.debug("Connected to SQLite: %s", DB_PATH)
         return conn
 
 
+def release_connection(conn):
+    if DB_TYPE == "postgres" and conn and _postgres_pool:
+        _postgres_pool.putconn(conn)
+
+
+def close_all_pools():
+    global _postgres_pool
+    if _postgres_pool:
+        _postgres_pool.closeall()
+        _postgres_pool = None
+        logger.info("PostgreSQL connection pool closed")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Safety validation
+# ─────────────────────────────────────────────────────────────────────────────
 def validate_sql_safety(query: str) -> Optional[str]:
-    """
-    Checks if the SQL query is safe (read-only).
-    Returns None if safe, otherwise returns an error message.
-    """
-    forbidden_keywords = [
-        "UPDATE",
-        "DELETE",
-        "DROP",
-        "ALTER",
-        "INSERT",
-        "CREATE",
-        "REPLACE",
-        "TRUNCATE",
-        "GRANT",
-        "REVOKE",
+    forbidden = [
+        "UPDATE", "DELETE", "DROP", "ALTER", "INSERT",
+        "CREATE", "REPLACE", "TRUNCATE", "GRANT", "REVOKE",
     ]
-
-    # Clean the query for checking
-    # Remove leading/trailing whitespace
     query_upper = query.strip().upper()
-
-    # Check if valid starting keyword
-    allowed_starts = ("SELECT", "WITH", "EXPLAIN")
-    if not query_upper.startswith(allowed_starts):
-        return (
-            "Safety Violation: Only SELECT, WITH, and EXPLAIN statements are allowed."
-        )
-
-    # Check for chained destructive commands
-    # Look for semicolon followed by forbidden keywords
-    # This regex looks for: semicolon, optional whitespace, forbidden keyword, word boundary
-    pattern = r";\s*(" + "|".join(forbidden_keywords) + r")\b"
+    if not query_upper.startswith(("SELECT", "WITH", "EXPLAIN")):
+        return "Safety Violation: Only SELECT, WITH, and EXPLAIN statements are allowed."
+    pattern = r";\s*(" + "|".join(forbidden) + r")\b"
     if re.search(pattern, query_upper):
         return "Safety Violation: Potentially destructive chained command detected."
-
     return None
 
 
-def execute_query_sqlite(
-    cursor, query: str
-) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
-    """Execute query on SQLite and return results."""
+# ─────────────────────────────────────────────────────────────────────────────
+# Query execution
+# ─────────────────────────────────────────────────────────────────────────────
+def execute_query_sqlite(cursor, query: str) -> Tuple[Optional[List[Dict]], Optional[str]]:
     try:
         cursor.execute(query)
-
         if cursor.description:
             columns = [desc[0] for desc in cursor.description]
-            rows = cursor.fetchall()
-            results = [dict(zip(columns, row)) for row in rows]
-            return results, None
-        else:
-            return [], None
+            return [dict(zip(columns, row)) for row in cursor.fetchall()], None
+        return [], None
     except sqlite3.Error as e:
         return None, str(e)
     except Exception as e:
-        return None, f"Unexpected error: {str(e)}"
+        return None, f"Unexpected error: {e}"
 
 
-def execute_query_postgres(
-    cursor, query: str
-) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
-    """Execute query on PostgreSQL and return results."""
+def execute_query_postgres(cursor, query: str) -> Tuple[Optional[List[Dict]], Optional[str]]:
+    """
+    Execute a PostgreSQL query and return JSON-safe results.
+
+    The _serialize_row call converts Decimal → float and date/datetime → ISO
+    string so that downstream json.dumps() (in logger.add_message) never raises
+    'Object of type Decimal is not JSON serializable'.
+    """
     try:
         cursor.execute(query)
-
-        # Get column names from cursor description
         if cursor.description:
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
-            results = [dict(zip(columns, row)) for row in rows]
+            results = [_serialize_row(dict(zip(columns, row))) for row in rows]
             return results, None
-        else:
-            return [], None
+        return [], None
     except PostgresError as e:
         return None, str(e)
     except Exception as e:
-        return None, f"Unexpected error: {str(e)}"
+        return None, f"Unexpected error: {e}"
 
 
-def run_sql_query(query: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
-    """
-    Executes a SQL query against the configured database (SQLite or PostgreSQL).
-
-    Args:
-        query (str): The SQL query to execute.
-
-    Returns:
-        Tuple[Optional[List[Dict[str, Any]]], Optional[str]]: A tuple containing results (as list of dicts)
-                                                              and error message (if any).
-    """
-    # Step 1: Validate Safety
+def run_sql_query(query: str) -> Tuple[Optional[List[Dict]], Optional[str]]:
     safety_error = validate_sql_safety(query)
     if safety_error:
         return None, safety_error
 
+    conn = None
     try:
         conn = get_db_connection()
-
+        cursor = conn.cursor()
         if DB_TYPE == "postgres":
-            cursor = conn.cursor()
-            results, error = execute_query_postgres(cursor, query)
-        else:  # SQLite
-            cursor = conn.cursor()
-            results, error = execute_query_sqlite(cursor, query)
-
-        conn.close()
-        return results, error
-
+            return execute_query_postgres(cursor, query)
+        else:
+            return execute_query_sqlite(cursor, query)
     except ConnectionError as e:
-        return None, f"Database connection error: {str(e)}"
+        return None, f"Database connection error: {e}"
     except Exception as e:
-        return None, f"Database error: {str(e)}"
+        return None, f"Database error: {e}"
+    finally:
+        if conn:
+            if DB_TYPE == "postgres":
+                release_connection(conn)
+            else:
+                conn.close()
 
 
 def get_db_schema() -> Dict[str, List[str]]:
-    """
-    Retrieves the schema (table names and columns) from the configured database.
-    Supports SQLite and PostgreSQL.
-
-    Returns:
-        Dict with table names as keys and list of columns as values.
-    """
     schema = {}
-
+    conn = None
     try:
         conn = get_db_connection()
-
         if DB_TYPE == "postgres":
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
             )
             tables = [row[0] for row in cursor.fetchall()]
-
             for table in tables:
                 cursor.execute(
-                    f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table}' ORDER BY ordinal_position"
+                    "SELECT column_name, data_type FROM information_schema.columns "
+                    "WHERE table_name = %s ORDER BY ordinal_position",
+                    (table,),
                 )
-                columns = cursor.fetchall()
-                schema[table] = [f"{col[0]} ({col[1]})" for col in columns]
-        else:  # SQLite
+                schema[table] = [f"{col[0]} ({col[1]})" for col in cursor.fetchall()]
+        else:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = [row[0] for row in cursor.fetchall()]
-
-            for table in tables:
+            for (table,) in cursor.fetchall():
                 cursor.execute(f"PRAGMA table_info({table});")
-                columns = cursor.fetchall()
-                # col[1] is name, col[2] is type
-                schema[table] = [f"{col[1]} ({col[2]})" for col in columns]
-
-        conn.close()
-
+                schema[table] = [f"{col[1]} ({col[2]})" for col in cursor.fetchall()]
     except Exception as e:
-        logger.error(f"Error fetching schema: {e}")
-
+        logger.error("Error fetching schema: %s", e)
+    finally:
+        if conn:
+            if DB_TYPE == "postgres":
+                release_connection(conn)
+            else:
+                conn.close()
     return schema

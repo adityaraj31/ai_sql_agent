@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Sidebar, ChatInput, ResultsTable, ResultsChart } from './components';
-import { chat, getHistory, clearHistory, createEmbeddings } from './services/api';
-import type { ChatMessage, QueryLog, ChartConfig } from './types';
+import { Sidebar, ChatInput, ChatMessage } from './components';
+import { chat, getHistory, clearHistory, createEmbeddings, getEmbeddingStatus } from './services/api';
+import type { ChatMessage as ChatMessageType, QueryLog } from './types';
 import './App.css';
 
 function App() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [history, setHistory] = useState<QueryLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingEmbeddings, setIsCreatingEmbeddings] = useState(false);
+  const [embeddingStatus, setEmbeddingStatus] = useState<string>('not_started');
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -22,7 +23,32 @@ function App() {
 
   useEffect(() => {
     loadHistory();
+    checkEmbeddingStatus();
   }, []);
+
+  // Poll for embedding status when in progress
+  useEffect(() => {
+    if (embeddingStatus === 'in_progress') {
+      const interval = setInterval(() => {
+        checkEmbeddingStatus();
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [embeddingStatus]);
+
+  const checkEmbeddingStatus = async () => {
+    try {
+      const status = await getEmbeddingStatus();
+      setEmbeddingStatus(status.status);
+      if (status.status === 'completed') {
+        alert('✅ Embedding creation completed successfully!');
+      } else if (status.status === 'failed') {
+        alert(`❌ Embedding creation failed: ${status.message}`);
+      }
+    } catch (err) {
+      console.error('Failed to check embedding status:', err);
+    }
+  };
 
   const loadHistory = async () => {
     try {
@@ -34,7 +60,7 @@ function App() {
   };
 
   const handleSendMessage = async (question: string) => {
-    const userMessage: ChatMessage = {
+    const userMessage: ChatMessageType = {
       role: 'user',
       content: question,
     };
@@ -57,12 +83,13 @@ function App() {
       });
 
       if (response.success) {
-        const assistantMessage: ChatMessage = {
+        const assistantMessage: ChatMessageType = {
           role: 'assistant',
-          content: 'Here are the results:',
+          content: response.message,
           sql: response.sql_query,
           results: response.results,
           chart: null,
+          is_relevant: response.is_relevant,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
@@ -92,76 +119,17 @@ function App() {
 
   const handleCreateEmbeddings = async () => {
     setIsCreatingEmbeddings(true);
+    setEmbeddingStatus('in_progress');
     try {
       await createEmbeddings();
-      alert('Embedding creation started in the background. It will take 1-2 minutes.');
     } catch (err) {
       console.error('Failed to start embedding creation:', err);
-      alert('Failed to start embedding creation');
-    } finally {
-      setIsCreatingEmbeddings(false);
+      setEmbeddingStatus('failed');
     }
   };
 
   const handleHistoryClick = (question: string) => {
     handleSendMessage(question);
-  };
-
-  const analyzeForChart = (results: Record<string, unknown>[], question: string): ChartConfig | null => {
-    if (!results || results.length < 2) {
-      const numericCols = results?.[0] ? Object.keys(results[0]).filter((k) => typeof results[0][k] === 'number') : [];
-      if (results?.length === 1 && numericCols.length >= 2) {
-        return {
-          chart_type: 'bar',
-          x_axis: '__columns__',
-          y_axis: '__values__',
-          title: 'Comparison',
-        };
-      }
-      return null;
-    }
-
-    const columns = Object.keys(results[0]);
-    const numericColumns = columns.filter((col) =>
-      results.some((row) => typeof row[col] === 'number')
-    );
-    const stringColumns = columns.filter((col) =>
-      results.some((row) => typeof row[col] === 'string')
-    );
-
-    const questionLower = question.toLowerCase();
-    const hasTimeKeywords = ['date', 'year', 'month', 'quarter', 'time', 'day', 'week'].some(
-      (kw) => questionLower.includes(kw)
-    );
-
-    if (hasTimeKeywords && stringColumns.length > 0) {
-      return {
-        chart_type: 'line',
-        x_axis: stringColumns[0],
-        y_axis: numericColumns[0] || stringColumns[1] || columns[1],
-        title: 'Trend',
-      };
-    }
-
-    if (numericColumns.length >= 2) {
-      return {
-        chart_type: 'scatter',
-        x_axis: stringColumns[0] || columns[0],
-        y_axis: numericColumns[0],
-        title: 'Correlation',
-      };
-    }
-
-    if (stringColumns.length > 0 && numericColumns.length > 0) {
-      return {
-        chart_type: 'bar',
-        x_axis: stringColumns[0],
-        y_axis: numericColumns[0],
-        title: 'Distribution',
-      };
-    }
-
-    return null;
   };
 
   return (
@@ -172,6 +140,7 @@ function App() {
         onClearHistory={handleClearHistory}
         onCreateEmbeddings={handleCreateEmbeddings}
         isCreatingEmbeddings={isCreatingEmbeddings}
+        embeddingStatus={embeddingStatus}
         onHistoryClick={handleHistoryClick}
       />
 
@@ -184,35 +153,11 @@ function App() {
         ) : (
           <div className="chat-container">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`message message-${msg.role}`}>
-                <div className="message-content">
-                  {msg.role === 'user' ? (
-                    <p>{msg.content}</p>
-                  ) : (
-                    <>
-                      {msg.sql && (
-                        <div className="sql-query">
-                          <span className="sql-label">Generated SQL:</span>
-                          <pre>{msg.sql}</pre>
-                        </div>
-                      )}
-                      {msg.content && <p>{msg.content}</p>}
-                      {msg.results && msg.results.length > 0 && (
-                        <>
-                          <ResultsTable results={msg.results} />
-                          {(() => {
-                            const chartConfig = analyzeForChart(msg.results, messages[idx - 1]?.content || '');
-                            if (chartConfig) {
-                              return <ResultsChart data={msg.results} config={chartConfig} />;
-                            }
-                            return null;
-                          })()}
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+              <ChatMessage 
+                key={idx} 
+                message={msg}
+                previousQuestion={messages[idx - 1]?.content}
+              />
             ))}
             {isLoading && (
               <div className="message message-assistant">

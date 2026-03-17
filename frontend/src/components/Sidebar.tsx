@@ -1,4 +1,4 @@
-import { Plus, Trash2, Database, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Database, RefreshCw, Loader2, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 import type { QueryLog } from '../types';
 
 interface SidebarProps {
@@ -7,6 +7,7 @@ interface SidebarProps {
   onClearHistory: () => void;
   onCreateEmbeddings: () => void;
   isCreatingEmbeddings: boolean;
+  embeddingStatus: string;
   onHistoryClick: (question: string) => void;
 }
 
@@ -16,6 +17,7 @@ export function Sidebar({
   onClearHistory,
   onCreateEmbeddings,
   isCreatingEmbeddings,
+  embeddingStatus,
   onHistoryClick,
 }: SidebarProps) {
   return (
@@ -40,15 +42,25 @@ export function Sidebar({
         <button
           className="sidebar-action-btn"
           onClick={onCreateEmbeddings}
-          disabled={isCreatingEmbeddings}
+          disabled={isCreatingEmbeddings || embeddingStatus === 'in_progress'}
           title="Rebuild schema graph"
         >
-          {isCreatingEmbeddings ? (
+          {isCreatingEmbeddings || embeddingStatus === 'in_progress' ? (
             <Loader2 size={16} className="spin" />
+          ) : embeddingStatus === 'completed' ? (
+            <CheckCircle size={16} />
+          ) : embeddingStatus === 'failed' ? (
+            <XCircle size={16} />
           ) : (
             <RefreshCw size={16} />
           )}
-          {isCreatingEmbeddings ? 'Building...' : 'Create Embeddings'}
+          {isCreatingEmbeddings || embeddingStatus === 'in_progress'
+            ? 'Building...'
+            : embeddingStatus === 'completed'
+            ? 'Ready ✓'
+            : embeddingStatus === 'failed'
+            ? 'Failed ✗'
+            : 'Create Embeddings'}
         </button>
       </div>
 
@@ -61,23 +73,21 @@ export function Sidebar({
         </h3>
         
         {history.length === 0 ? (
-          <p className="sidebar-empty">No queries yet.</p>
+          <p className="sidebar-empty">No chat sessions yet.</p>
         ) : (
           <ul className="history-list">
             {history.slice(0, 10).reverse().map((log, index) => (
               <li key={index} className="history-item">
                 <button
                   className="history-btn"
-                  onClick={() => onHistoryClick(log.question)}
-                  title={log.question}
+                  onClick={() => onHistoryClick(log.title || 'Previous Chat')}
+                  title={log.title || 'Chat Session'}
                 >
+                  <MessageSquare size={14} />
                   <span className="history-question">
-                    {log.question.length > 30
-                      ? log.question.slice(0, 27) + '...'
-                      : log.question}
-                  </span>
-                  <span className={`history-status ${log.success ? 'success' : 'error'}`}>
-                    {log.success ? '✓' : '✗'}
+                    {(log.title || 'New Chat').length > 25
+                      ? (log.title || 'New Chat').slice(0, 22) + '...'
+                      : log.title || 'New Chat'}
                   </span>
                 </button>
               </li>

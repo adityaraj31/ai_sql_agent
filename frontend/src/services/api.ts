@@ -28,6 +28,11 @@ export const createEmbeddings = async (): Promise<EmbeddingsResponse> => {
   return response.data;
 };
 
+export const getEmbeddingStatus = async (): Promise<{ status: string; message: string }> => {
+  const response = await api.get<{ status: string; message: string }>('/embeddings/status');
+  return response.data;
+};
+
 export const healthCheck = async (): Promise<{ status: string; service: string; version: string }> => {
   const response = await api.get('/health');
   return response.data;
