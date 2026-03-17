@@ -1,12 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { Sidebar, ChatInput, ChatMessage } from './components';
-import { chat, getHistory, clearHistory, createEmbeddings, getEmbeddingStatus } from './services/api';
+import { chat, getHistory, getSessionMessages, deleteSession, clearHistory, createEmbeddings, getEmbeddingStatus } from './services/api';
 import type { ChatMessage as ChatMessageType, QueryLog } from './types';
 import './App.css';
+
+function generateSessionId(): string {
+  return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
 
 function App() {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [history, setHistory] = useState<QueryLog[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>(generateSessionId());
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingEmbeddings, setIsCreatingEmbeddings] = useState(false);
   const [embeddingStatus, setEmbeddingStatus] = useState<string>('not_started');
@@ -59,6 +64,25 @@ function App() {
     }
   };
 
+  const loadSessionMessages = async (sessionId: string) => {
+    try {
+      const data = await getSessionMessages(sessionId);
+      if (data.success && data.messages) {
+        const loadedMessages: ChatMessageType[] = data.messages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+          sql: msg.sql,
+          results: msg.results,
+          is_relevant: true,
+        }));
+        setMessages(loadedMessages);
+        setCurrentSessionId(sessionId);
+      }
+    } catch (err) {
+      console.error('Failed to load session messages:', err);
+    }
+  };
+
   const handleSendMessage = async (question: string) => {
     const userMessage: ChatMessageType = {
       role: 'user',
@@ -79,10 +103,16 @@ function App() {
 
       const response = await chat({
         question,
+        session_id: currentSessionId,
         chat_history: chatHistory,
       });
 
       if (response.success) {
+        // Update session_id from response if it's a new session
+        if (response.session_id && response.session_id !== currentSessionId) {
+          setCurrentSessionId(response.session_id);
+        }
+
         const assistantMessage: ChatMessageType = {
           role: 'assistant',
           content: response.message,
@@ -106,12 +136,14 @@ function App() {
   const handleNewChat = () => {
     setMessages([]);
     setError(null);
+    setCurrentSessionId(generateSessionId());
   };
 
   const handleClearHistory = async () => {
     try {
       await clearHistory();
       setHistory([]);
+      handleNewChat();
     } catch (err) {
       console.error('Failed to clear history:', err);
     }
@@ -128,8 +160,21 @@ function App() {
     }
   };
 
-  const handleHistoryClick = (question: string) => {
-    handleSendMessage(question);
+  const handleHistoryClick = async (session: QueryLog) => {
+    await loadSessionMessages(session.session_id);
+  };
+
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteSession(sessionId);
+      loadHistory();
+      if (currentSessionId === sessionId) {
+        handleNewChat();
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+    }
   };
 
   return (
@@ -142,13 +187,14 @@ function App() {
         isCreatingEmbeddings={isCreatingEmbeddings}
         embeddingStatus={embeddingStatus}
         onHistoryClick={handleHistoryClick}
+        onDeleteSession={handleDeleteSession}
       />
 
       <main className="main-content">
         {messages.length === 0 ? (
           <div className="greeting">
             <h1>How can I help you with data today?</h1>
-            <p>Ask anything from the Chinook database—sales, trends, or customer insights.</p>
+            <p>Ask anything about your data—users, subscriptions, plans, payments, or revenue insights.</p>
           </div>
         ) : (
           <div className="chat-container">

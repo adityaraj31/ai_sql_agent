@@ -15,6 +15,7 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   success: boolean;
+  session_id?: string;
   sql_query?: string;
   results?: Record<string, unknown>[];
   error?: string;
@@ -33,6 +34,12 @@ export interface HistoryResponse {
   success: boolean;
   count: number;
   logs: ChatSession[];
+}
+
+export interface SessionMessagesResponse {
+  success: boolean;
+  session_id: string;
+  messages: ChatMessage[];
 }
 
 export interface QueryLog {

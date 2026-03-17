@@ -35,7 +35,7 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 # Logging
-LOG_FILE = BASE_DIR / "query_logs.json"
+# Chat history is now stored in PostgreSQL (see CHAT_POSTGRES_CONNECTION_STRING)
 
 # API Keys
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")

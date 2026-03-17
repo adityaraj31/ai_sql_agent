@@ -1,4 +1,4 @@
-import { Plus, Trash2, Database, RefreshCw, Loader2, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { Plus, Trash2, Database, RefreshCw, Loader2, CheckCircle, XCircle, MessageSquare, X } from 'lucide-react';
 import type { QueryLog } from '../types';
 
 interface SidebarProps {
@@ -8,7 +8,8 @@ interface SidebarProps {
   onCreateEmbeddings: () => void;
   isCreatingEmbeddings: boolean;
   embeddingStatus: string;
-  onHistoryClick: (question: string) => void;
+  onHistoryClick: (session: QueryLog) => void;
+  onDeleteSession: (sessionId: string, e: React.MouseEvent) => void;
 }
 
 export function Sidebar({
@@ -19,6 +20,7 @@ export function Sidebar({
   isCreatingEmbeddings,
   embeddingStatus,
   onHistoryClick,
+  onDeleteSession,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -80,15 +82,22 @@ export function Sidebar({
               <li key={index} className="history-item">
                 <button
                   className="history-btn"
-                  onClick={() => onHistoryClick(log.title || 'Previous Chat')}
+                  onClick={() => onHistoryClick(log)}
                   title={log.title || 'Chat Session'}
                 >
                   <MessageSquare size={14} />
                   <span className="history-question">
-                    {(log.title || 'New Chat').length > 25
-                      ? (log.title || 'New Chat').slice(0, 22) + '...'
+                    {(log.title || 'New Chat').length > 20
+                      ? (log.title || 'New Chat').slice(0, 17) + '...'
                       : log.title || 'New Chat'}
                   </span>
+                </button>
+                <button
+                  className="history-delete-btn"
+                  onClick={(e) => onDeleteSession(log.session_id, e)}
+                  title="Delete session"
+                >
+                  <X size={12} />
                 </button>
               </li>
             ))}

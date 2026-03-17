@@ -51,10 +51,13 @@ from src.logger import (
     add_message,
     get_all_sessions,
     get_session_messages,
+    get_session_message_count,
+    update_session_title,
     delete_session,
     clear_logs,
 )
 from src.ingestion import build_schema_graph_neo4j
+from src.rag import generate_session_title
 
 from contextlib import asynccontextmanager
 
@@ -64,7 +67,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown handlers."""
     from src.graphrag import test_neo4j_connection, close_driver
     from src.database import close_all_pools
-    from src.logger import close_chat_pool
+    from src.logger import close_chat_pool, migrate_existing_sessions
 
     logger.info("Starting AI SQL Agent...")
 
@@ -73,6 +76,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Neo4j connection verified")
     else:
         logger.warning("⚠️ Neo4j not available - GraphRAG features disabled")
+
+    # Run migration for existing sessions
+    try:
+        updated = migrate_existing_sessions()
+        if updated > 0:
+            logger.info(f"✅ Migrated {updated} session titles")
+    except Exception as e:
+        logger.warning(f"Session migration skipped: {e}")
 
     yield
 
@@ -227,6 +238,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     success: bool
+    session_id: Optional[str] = None
     sql_query: Optional[str] = None
     results: Optional[List[Dict[str, Any]]] = None
     error: Optional[str] = None
@@ -286,6 +298,16 @@ async def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
         # Store user message (sanitize content from history too)
         add_message(session_id, role="user", content=question)
 
+        # Generate title for new sessions (first message)
+        message_count = get_session_message_count(session_id)
+        if message_count == 1:  # This is the first message
+            try:
+                title = generate_session_title(question)
+                update_session_title(session_id, title)
+                logger.info(f"Session '{session_id}' titled: '{title}'")
+            except Exception as title_err:
+                logger.warning(f"Failed to generate title: {title_err}")
+
         # Convert Pydantic models to dicts, excluding large 'results' field to avoid confusing the LLM
         history_dicts = []
         for msg in chat_history:
@@ -316,6 +338,7 @@ async def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
 
             return ChatResponse(
                 success=True,
+                session_id=session_id,
                 message=redirect_msg,
                 is_relevant=False,
             )
@@ -329,6 +352,7 @@ async def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
             )
             return ChatResponse(
                 success=False,
+                session_id=session_id,
                 error="Failed to generate SQL query",
                 message="The AI agent could not generate a valid SQL query",
             )
@@ -358,6 +382,7 @@ async def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
         if error:
             return ChatResponse(
                 success=False,
+                session_id=session_id,
                 sql_query=sql_query,
                 error=error,
                 message=f"Error executing query: {error}",
@@ -366,6 +391,7 @@ async def chat(http_request: Request, request: ChatRequest) -> ChatResponse:
         else:
             return ChatResponse(
                 success=True,
+                session_id=session_id,
                 sql_query=sql_query,
                 results=results,
                 message="Query executed successfully",

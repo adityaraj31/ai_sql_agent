@@ -18,11 +18,52 @@ from src.graphrag import (
     retrieve_schema_context,
     get_full_schema_text as get_schema_as_text,
 )
+from src.llm import get_llm
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def generate_session_title(first_message: str) -> str:
+    """
+    Generate a short, descriptive title for a chat session using LLM.
+    Returns a title that summarizes the user's first question.
+    """
+    if not first_message or len(first_message.strip()) < 3:
+        return "New Chat"
+
+    prompt = PromptTemplate.from_template("""
+You are a helpful assistant. Create a short, descriptive title (max 50 characters) 
+for a chat session based on the user's first message.
+
+User Message: {message}
+
+Generate a concise title that captures the essence of what they want to know.
+Examples:
+- "Sales by Region" 
+- "Customer Count Analysis"
+- "Q4 Revenue Comparison"
+- "Top 10 Albums"
+
+Output ONLY the title, no quotes or explanation.
+""")
+
+    try:
+        llm = get_llm()
+        chain = prompt | llm
+        response = chain.invoke({"message": first_message})
+        title = response.content.strip()[:50]
+
+        if not title:
+            return "New Chat"
+
+        logger.info(f"Generated session title: '{title}'")
+        return title
+    except Exception as e:
+        logger.warning(f"Failed to generate title: {e}")
+        return first_message[:40] + "..." if len(first_message) > 40 else first_message
 
 
 def get_llm():

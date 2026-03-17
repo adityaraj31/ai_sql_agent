@@ -154,9 +154,64 @@ def _ensure_tables():
         _tables_initialised = init_chat_tables()
 
 
+def migrate_existing_sessions() -> int:
+    """
+    Migration: Update existing sessions without titles using their first user message.
+    Returns the number of sessions updated.
+    """
+    if not CHAT_POSTGRES_CONNECTION_STRING:
+        return 0
+    _ensure_tables()
+
+    from src.rag import generate_session_title
+
+    conn = None
+    updated = 0
+    try:
+        conn = get_chat_db_connection()
+        cursor = conn.cursor()
+
+        # Get sessions without titles (NULL or 'New Chat')
+        cursor.execute("""
+            SELECT s.session_id, m.content
+            FROM chat_sessions s
+            LEFT JOIN chat_messages m ON m.session_id = s.session_id AND m.role = 'user'
+            WHERE s.title IS NULL OR s.title = 'New Chat'
+            ORDER BY s.created_at ASC
+            LIMIT 100
+        """)
+
+        sessions_to_update = cursor.fetchall()
+
+        for session_id, first_message in sessions_to_update:
+            if first_message:
+                try:
+                    title = generate_session_title(first_message)
+                    cursor.execute(
+                        "UPDATE chat_sessions SET title = %s WHERE session_id = %s",
+                        (title, session_id),
+                    )
+                    updated += 1
+                except Exception as e:
+                    logger.warning(f"Failed to generate title for {session_id}: {e}")
+
+        conn.commit()
+        if updated > 0:
+            logger.info(f"Migration: Updated {updated} session titles")
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+    finally:
+        if conn:
+            release_chat_connection(conn)
+
+    return updated
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def create_session(session_id: str, title: str = None) -> None:
     if not CHAT_POSTGRES_CONNECTION_STRING:
@@ -177,6 +232,31 @@ def create_session(session_id: str, title: str = None) -> None:
         conn.commit()
     except Exception as e:
         logger.error("Failed to create session: %s", e)
+    finally:
+        if conn:
+            release_chat_connection(conn)
+
+
+def update_session_title(session_id: str, title: str) -> None:
+    """Update the title of an existing session."""
+    if not CHAT_POSTGRES_CONNECTION_STRING:
+        return
+    _ensure_tables()
+    conn = None
+    try:
+        conn = get_chat_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE chat_sessions 
+            SET title = %s 
+            WHERE session_id = %s
+            """,
+            (title, session_id),
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error("Failed to update session title: %s", e)
     finally:
         if conn:
             release_chat_connection(conn)
@@ -250,6 +330,29 @@ def get_session_messages(session_id: str) -> List[Dict]:
             release_chat_connection(conn)
 
 
+def get_session_message_count(session_id: str) -> int:
+    """Get the number of messages in a session."""
+    if not CHAT_POSTGRES_CONNECTION_STRING:
+        return 0
+    _ensure_tables()
+    conn = None
+    try:
+        conn = get_chat_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM chat_messages WHERE session_id = %s",
+            (session_id,),
+        )
+        result = cursor.fetchone()
+        return result[0] if result else 0
+    except Exception as e:
+        logger.error("Failed to get message count: %s", e)
+        return 0
+    finally:
+        if conn:
+            release_chat_connection(conn)
+
+
 def get_all_sessions() -> List[Dict]:
     if not CHAT_POSTGRES_CONNECTION_STRING:
         return []
@@ -317,7 +420,9 @@ def clear_logs() -> None:
 
 
 # Legacy stubs
-def log_query(question: str, sql_query: str, success: bool, error_message: str = None) -> None:
+def log_query(
+    question: str, sql_query: str, success: bool, error_message: str = None
+) -> None:
     pass
 
 

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ChatRequest, ChatResponse, HistoryResponse, EmbeddingsResponse } from '../types';
+import type { ChatRequest, ChatResponse, HistoryResponse, EmbeddingsResponse, ChatMessage } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -15,6 +15,16 @@ export const chat = async (request: ChatRequest): Promise<ChatResponse> => {
 
 export const getHistory = async (): Promise<HistoryResponse> => {
   const response = await api.get<HistoryResponse>('/history');
+  return response.data;
+};
+
+export const getSessionMessages = async (sessionId: string): Promise<{ success: boolean; session_id: string; messages: ChatMessage[] }> => {
+  const response = await api.get<{ success: boolean; session_id: string; messages: ChatMessage[] }>(`/history/${sessionId}`);
+  return response.data;
+};
+
+export const deleteSession = async (sessionId: string): Promise<{ success: boolean; message: string }> => {
+  const response = await api.delete<{ success: boolean; message: string }>(`/history/${sessionId}`);
   return response.data;
 };
 
