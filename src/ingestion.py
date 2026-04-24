@@ -1,6 +1,12 @@
+import sys
+from pathlib import Path
+
+# Allow `python src/ingestion.py` from repo root (script dir is on sys.path, not the package root).
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import time
-import os
 import logging
 
 # Configure logging
@@ -17,24 +23,9 @@ from src.config import (
     PINECONE_CLOUD, 
     PINECONE_REGION,
     EMBEDDING_MODEL_NAME,
-    LANGCHAIN_TRACING_V2,
-    LANGCHAIN_API_KEY,
-    LANGCHAIN_PROJECT,
-    LANGCHAIN_ENDPOINT
 )
 from src.database import get_db_schema
 from src.rag import get_embeddings, get_vectorstore
-
-# Initialize LangSmith Tracing
-if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
-    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-    logger.info("✅ LangSmith tracing enabled for ingestion")
-else:
-    logger.info("ℹ️  LangSmith tracing disabled")
 
 def create_documents_from_schema() -> list[Document]:
     """Convert DB schema to a list of LangChain Documents."""

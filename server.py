@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import uvicorn
 import sys
-import os
 
 # Add src to path for imports
 sys.path.insert(0, ".")
@@ -13,23 +12,6 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Initialize LangSmith Tracing
-from src.config import (
-    LANGCHAIN_TRACING_V2, 
-    LANGCHAIN_API_KEY, 
-    LANGCHAIN_PROJECT,
-    LANGCHAIN_ENDPOINT
-)
-
-if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
-    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
-    logger.info("✅ LangSmith tracing enabled")
-else:
-    logger.info("ℹ️  LangSmith tracing disabled (set LANGCHAIN_TRACING_V2=true and LANGCHAIN_API_KEY in .env to enable)")
 
 from src.rag import generate_sql
 from src.database import run_sql_query

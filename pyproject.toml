@@ -12,7 +12,6 @@ dependencies = [
     "langchain-community>=0.4.1",
     "langchain-groq>=1.1.1",
     "langchain-pinecone>=0.2.13",
-    "langsmith>=0.1.0",
     "pandas>=2.3.3",
     "pinecone>=7.3.0",
     "plotly>=6.5.2",
@@ -22,4 +21,5 @@ dependencies = [
     "fastapi>=0.135.1",
     "uvicorn>=0.41.0",
     "langchain-huggingface>=1.2.1",
+    "langchain-core>=1.2.17",
 ]

@@ -21,8 +21,6 @@ Thumbs.db
 # VS Code settings
 .vscode/
 
-# SQLite DB (optional — if DB is not meant to be committed)
-data/chinook.db
 
 # Vectorstore / Embeddings
 vectorstore/
@@ -51,4 +49,3 @@ build/
 .coverage
 htmlcov/
 TESTING.md
-check_db.py

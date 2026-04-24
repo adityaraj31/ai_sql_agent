@@ -41,7 +41,6 @@ This tool bridges the gap between business users and SQL databases by allowing a
 | LLM           | [Groq](https://groq.com/) (Llama3.3 70B Turbo)         |
 | RAG Framework | [LangChain](https://www.langchain.com/)                |
 | Vector DB     | [Pinecone](https://www.pinecone.io/) (Cloud Vector DB) |
-| Tracing       | [LangSmith](https://smith.langchain.com/)              |
 | Frontend      | [Streamlit](https://streamlit.io/)                     |
 | Database      | Chinook SQLite (sample DB)                             |
 
@@ -63,19 +62,8 @@ ai-sql-agent/
 ├── app.py                      # Main Streamlit application
 ├── server.py                   # FastAPI backend
 ├── requirements.txt            # Project dependencies
-└── .env                        # API Keys (Groq, Pinecone, LangSmith)
+└── .env                        # API Keys (Groq, Pinecone)
 ```
-
----
-
-## 🔍 LangSmith Tracing & Monitoring
-
-Full observability is integrated via **LangSmith** to monitor LLM latency, token usage, and RAG retrieval accuracy.
-
-### ✨ Highlights:
-- **Trace Visibility**: Inspect every step of the reformulation and generation chain.
-- **Performance Metrics**: Monitor token usage and latency for Llama3.3.
-- **Error Tracking**: Identify schema retrieval gaps or SQL syntax errors instantly.
 
 ---
 
@@ -98,11 +86,6 @@ Full observability is integrated via **LangSmith** to monitor LLM latency, token
    GROQ_API_KEY=your_groq_api_key
    PINECONE_API_KEY=your_pinecone_api_key
    PINECONE_INDEX_NAME=your_index_name
-   
-   # Tracing (Optional)
-   LANGCHAIN_TRACING_V2=true
-   LANGCHAIN_API_KEY=your_langsmith_api_key
-   LANGCHAIN_PROJECT=ai-sql-agent
    ```
 
 4. **Initialize Data**

@@ -30,12 +30,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
-# LangSmith Tracing Configuration
-LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
-LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "ai-sql-agent")
-LANGCHAIN_ENDPOINT = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
-
 # Models
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 LLM_MODEL_NAME = "llama-3.3-70b-versatile"

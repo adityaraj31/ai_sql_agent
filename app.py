@@ -3,23 +3,8 @@ import streamlit as st
 import pandas as pd
 import requests
 import json
-import os
 import time
 from src.visualization import analyze_data_for_chart, render_chart
-
-# Initialize LangSmith Tracing
-from src.config import (
-    LANGCHAIN_TRACING_V2, 
-    LANGCHAIN_API_KEY, 
-    LANGCHAIN_PROJECT,
-    LANGCHAIN_ENDPOINT
-)
-
-if LANGCHAIN_TRACING_V2 and LANGCHAIN_API_KEY:
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
-    os.environ["LANGCHAIN_ENDPOINT"] = LANGCHAIN_ENDPOINT
 
 # FastAPI backend URL
 API_BASE_URL = "http://localhost:8000"
